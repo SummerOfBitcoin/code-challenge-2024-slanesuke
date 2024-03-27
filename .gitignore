@@ -1,0 +1,11 @@
+# Ignore target directory
+/target/
+/debug/
+
+debug/
+target/
+
+Cargo.lock
+
+# Ignore my JetBrains IDE files
+.idea/
