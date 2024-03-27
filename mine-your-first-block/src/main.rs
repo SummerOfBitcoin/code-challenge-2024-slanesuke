@@ -3,7 +3,7 @@ use serde_json;
 use sha2;
 
 // Transaction struct that may be overcomplicated right now. We will see
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Deserialize)]
 struct Transaction {
     version: u32,
     locktime: u32,
@@ -11,7 +11,7 @@ struct Transaction {
     vout: Vec<Vout>,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Deserialize)]
 struct Vin {
     txid: String,
     vout: u32,
@@ -23,7 +23,7 @@ struct Vin {
     sequence: u32,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Deserialize)]
 struct Prevout {
     scriptpubkey: String,
     scriptpubkey_asm: String,
@@ -32,7 +32,7 @@ struct Prevout {
     value: u64,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Deserialize)]
 struct Vout {
     scriptpubkey: String,
     scriptpubkey_asm: String,
