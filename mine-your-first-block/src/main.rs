@@ -83,7 +83,31 @@ fn deserialize_tx(filename: &str) -> Result<Transaction, Box<dyn std::error::Err
 
 
 fn validate_tx(transaction: &Transaction) -> bool {
-    // Code to validate tx based
+
+    // If the input value in sats is less than the output value then the transaction is already
+    // invalid. the sum of the input must be greater than the sum of the output the difference is
+    // the transaction fee. need to filter out higher tx fees later to include in block
+    let input_value: u64 = transaction.vin.iter().map(|vin| vin.prevout.value).sum();
+    let output_value: u64 = transaction.vout.iter().map(|vout| vout.value).sum();
+    if input_value < output_value {
+        return false;
+    }
+
+    // Verify if scriptpubkey_asm returns true
+    // will this work as for outputs in transaction outputs? verify if this is correct
+    for vout in &transaction.vout {
+        if !verify_script(&vout.scriptpubkey_asm) {
+            return false;
+        }
+    }
+    // if all verifications pass the transaction is validated and returns true or OK
+    true
+}
+
+// TODO make a function that verifies if a script returns OK
+fn verify_script(script: &str) -> bool {
+    // Verify the script based off grokking bitcoin chapter 5
+    // look over OP_CODES or operators
     true
 }
 
