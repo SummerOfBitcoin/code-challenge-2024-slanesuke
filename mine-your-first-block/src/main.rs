@@ -1,8 +1,10 @@
 use serde::Deserialize;
 use serde_json;
-use sha2;
+use sha2::{Digest as ShaDigest, Sha256};
 use std::fs::File;
 use std::io::Read;
+use ripemd::{Digest as RipemdDigest, Ripemd160};
+
 
 // Transaction struct that may be overcomplicated right now. We will see
 #[derive(Debug, Deserialize)]
@@ -74,10 +76,16 @@ fn deserialize_tx(filename: &str) -> Result<Transaction, Box<dyn std::error::Err
 }
 
 // TODO Make a validate_tx function that returns true if tx is valid and throws out invalid tx
-// fn validate_tx(transaction: Transaction) -> bool {
-//     // Code to validate tx based
-//     true
-// }
+// A Valid transaction must have:::::::
+// 1.  the sum of the input amounts must be greater than or equal to the sum of the output amounts.
+       // The difference, if any, is called a transaction fee
+// 2. the signatures are correct and match
+
+
+fn validate_tx(transaction: &Transaction) -> bool {
+    // Code to validate tx based
+    true
+}
 
 fn main() {
     // Path to one transaction
@@ -89,4 +97,11 @@ fn main() {
     }
 }
 
-// Start processing transactions, validating them,
+// TODO: Creating the block output.txt
+// the script must generate an output file named output.txt with the following structure:
+//
+// First line: The block header.
+// Second line: The serialized coinbase transaction.
+// Following lines: The transaction IDs (txids) of the transactions mined in the block, in order.
+//  The first txid should be that of the coinbase transaction
+
