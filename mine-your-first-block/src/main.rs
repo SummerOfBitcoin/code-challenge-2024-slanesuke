@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use serde::Deserialize;
 use serde_json;
 use sha2::{Digest as ShaDigest, Sha256};
@@ -108,12 +109,75 @@ fn validate_tx(transaction: &Transaction) -> bool {
 fn verify_script(script: &str) -> bool {
     // Verify the script based off grokking bitcoin chapter 5
     // look over OP_CODES or operators
-    true
+
+    // Making a stack for the op_code opperation
+    let mut stack: Vec<Vec<u8>> = Vec::new();
+
+    // Loop through the script and match the OP_CODEs
+    for op in script.split_whitespace() {
+        match op {
+            "OP_DUP" => {
+                // If the stack is empty return false
+                // Otherwise clone the last item on the stack and push it to the stack
+                if let Some(data) = stack.last() {
+                    stack.push(data.clone())
+                } else {
+                    return false
+                }
+            }
+            "OP_HASH160"  => {
+                // If the stack is empty return false
+                // Otherwise take the last item from the stack, hash it with sha256 then ripemd160
+                // and push it to the stack
+                if let Some(pubkey) = stack.pop() {
+                    let hash = ripemd160(sha256(pubkey.clone()));
+                    stack.push(hash);
+                } else {
+                    return false
+                }
+            }
+            "OP_EQUALVERIFY" => {
+                // if stack is less than 2 return false
+                if stack.len() < 2 {
+                    return false;
+                }
+                // Otherwise pop the last two items from the stack and compare them
+                // if they are not equal return false, if they are just continue
+                let stack_item1 = stack.pop().unwrap();
+                let stack_item2 = stack.pop().unwrap();
+                if stack_item1 != stack_item2 {
+                    return false;
+                }
+
+            }
+            _ => {
+                // If it's not an operator,it'a ordinary data (like sig or pubkey) and push it onto the stack
+                // Verify !!!
+                let data = hex::decode(op).unwrap_or_default(); // Convert hex string to bytes
+                stack.push(data);
+            }
+        }
+    }
+    // Check final result
+    // If the stack has only one element and it's not empty, transaction is valid
+    stack.len() == 1 && !stack.is_empty()
+}
+
+fn ripemd160(data: Vec<u8>) -> Vec<u8> {
+    let mut hasher = Ripemd160::new();
+    hasher.update(data);
+    hasher.finalize().to_vec()
+}
+
+fn sha256(data: Vec<u8>) -> Vec<u8> {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    hasher.finalize().to_vec()
 }
 
 fn main() {
     // Path to one transaction
-    let path = "../mempool/0a3c3139b32f021a35ac9a7bef4d59d4abba9ee0160910ac94b4bcefb294f196.json";
+    let path = "../mempool/0a3fd98f8b3d89d2080489d75029ebaed0c8c631d061c2e9e90957a40e99eb4c.json";
 
     match deserialize_tx(path) {
         Ok(tx) => println!("Deserialized Transaction is \n {:#?}", tx),
