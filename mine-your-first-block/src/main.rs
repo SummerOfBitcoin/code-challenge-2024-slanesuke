@@ -3,7 +3,7 @@ use serde::Deserialize;
 use serde_json;
 use sha2::{Digest as ShaDigest, Sha256};
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Write};
 use ripemd::{Digest as RipemdDigest, Ripemd160};
 
 // Unsure if i need to use the extern crate for secp256k1
@@ -101,11 +101,15 @@ fn validate_tx(transaction: &Transaction) -> Result<bool, Box<dyn Error>> {
     // Use  validate_signature function to verify the signature of the transaction
     for vin in &transaction.vin {
         // Parse signature, pubkey and data
-        let (signature, public_key) = get_signature_and_pubkey(&vin.scriptsig_asm)?;
 
-        let signed_data = create_sighash(transaction, vin.vout as usize);
 
-        if !validate_signature(signature, public_key, signed_data)? {
+        // let signed_data = create_sighash(transaction, vin.vout as usize);
+        let (signature, public_key, sighash_type) = get_signature_and_pubkey_and_sighash_type(&vin.scriptsig_asm)?;
+        let signed_data = create_sighash(transaction, vin.vout as usize, sighash_type as u32)?;
+
+
+
+        if !validate_signature(signature, public_key, signed_data) {
             return Err("Signature verification failed".into())
         }
     }
@@ -115,7 +119,7 @@ fn validate_tx(transaction: &Transaction) -> Result<bool, Box<dyn Error>> {
 }
 
 
-fn get_signature_and_pubkey(scriptsig_asm: &str) -> Result<(Vec<u8>, Vec<u8>), Box<dyn Error>> {
+fn get_signature_and_pubkey_and_sighash_type(scriptsig_asm: &str) -> Result<(Vec<u8>, Vec<u8>, u8), Box<dyn Error>> {
     // Parse the scriptsig_asm to get the signature and pubkey
     // The signature is the first element in the scriptsig_asm
     // The pubkey is the second element
@@ -125,7 +129,7 @@ fn get_signature_and_pubkey(scriptsig_asm: &str) -> Result<(Vec<u8>, Vec<u8>), B
         return Err("scriptsig_asm format is invalid".into());
     }
 
-    // Remove the OP_PUSHBYTES_71 or OP_PUSHBYTES_72 prefix if its there
+    // Remove the OP_PUSHBYTES_71 or OP_PUSHBYTES_72 prefix if it's there
     let signature_hex = parts[0].trim_start_matches("OP_PUSHBYTES_71    ")
         .trim_start_matches("OP_PUSHBYTES_72");
     let pubkey_hex = parts[1].trim_start_matches("OP_PUSHBYTES_33");
@@ -133,23 +137,22 @@ fn get_signature_and_pubkey(scriptsig_asm: &str) -> Result<(Vec<u8>, Vec<u8>), B
     let signature = hex::decode(signature_hex)?;
     let pubkey = hex::decode(pubkey_hex)?;
 
-    Ok((signature, pubkey))
+    let sighash_type = signature.last().clone().unwrap_or(&0);
+
+    Ok((signature.clone(), pubkey, *sighash_type))
 }
 
 
-// Todo Create SIGNHAH
-fn create_sighash(transaction: &Transaction, input_index: usize) -> Result<Vec<u8>, Box<dyn Error>> {
-    // The function needs to:
-    // 1. Serialize the transaction in a way that's appropriate for the sighash type.
-    // 2. Hash the serialized transaction twice with SHA256.
-    // Note: This is a placeholder. Real Bitcoin transactions require specific modifications
-    // based on the sighash type.
+
+fn create_sighash(transaction: &Transaction, input_index: usize, sighash_type: u32) -> Result<Vec<u8>, Box<dyn Error>> {
+    // This function needs to create a sighash for a transaction
+
 
     //STILL NEED TO VERIFY THIS AND WORK ON SERIALIZATION
 
     let serialized_tx = serialize_tx(transaction).unwrap();
 
-    let modified_tx = modify_tx_for_sighash(serialized_tx, input_index).unwrap();
+    let modified_tx = modify_tx_for_sighash(serialized_tx, input_index,  sighash_type).unwrap();
 
     let sighash = sha256(sha256(modified_tx));
 
@@ -158,14 +161,99 @@ fn create_sighash(transaction: &Transaction, input_index: usize) -> Result<Vec<u
 
 fn serialize_tx(transaction: &Transaction) -> Result<Vec<u8>, Box<dyn Error>> {
     // This function needs to serialize the transaction into bytes
-    Ok(Vec::new())
+
+    let mut serialized_tx = Vec::new();
+
+    // Serialize version field, little endian
+    serialized_tx.write_all(&transaction.version.to_le_bytes())?;
+
+    // Serialize vin count
+    write_varint(transaction.vin.len() as u64, &mut serialized_tx)?;
+
+    // Serialize each vin {
+    for vin in &transaction.vin {
+        // convert txid from hex to bytes
+        let txid_bytes = hex::decode(&vin.txid)?;
+        serialized_tx.write_all(&txid_bytes)?;
+
+        // Serialize vout, little endian
+        serialized_tx.write_all(&vin.vout.to_le_bytes())?;
+
+        // Serialize scriptSig
+        let scriptsig_bytes = hex::decode(&vin.scriptsig)?;
+        serialized_tx.write_all(&scriptsig_bytes)?;
+
+        serialized_tx.write_all(&vin.sequence.to_le_bytes())?;
+    }
+
+
+    // Serialize  vout count
+    write_varint(transaction.vout.len() as u64, &mut serialized_tx)?;
+
+    for vout in &transaction.vout {
+        let scriptpubkey_bytes = hex::decode(&vout.scriptpubkey)?;
+        serialized_tx.write_all(&scriptpubkey_bytes)?;
+
+        // Write value to serialized_tx
+        serialized_tx.write_all(&vout.value.to_le_bytes())?;
+    }
+
+    // Serialize locktime
+    serialized_tx.write_all(&transaction.locktime.to_le_bytes())?;
+
+
+    Ok(serialized_tx)
 }
 
-fn modify_tx_for_sighash(serialized_tx: Vec<u8>, input_index: usize) -> Result<Vec<u8>, Box<dyn Error>> {
-    // This function needs to modify the serialized transaction based on the sighash type
+// Helper function to write variable length integers
+// Got help from chatgpt
 
-    Ok(Vec::new())
+fn write_varint(value: u64, buf: &mut Vec<u8>) -> Result<(), Box<dyn Error>> {
+    if value < 0xFD {
+        buf.write_all(&[value as u8])?;
+    } else if value <= 0xFFFF {
+        buf.write_all(&[0xFD])?;
+        buf.write_all(&value.to_le_bytes())?;
+    } else if value <= 0xFFFFFFFF {
+        buf.write_all(&[0xFE])?;
+        buf.write_all(&value.to_le_bytes())?;
+    } else {
+        buf.write_all(&[0xFF])?;
+        buf.write_all(&value.to_le_bytes())?;
+    }
+    Ok(())
 }
+
+// Helper function to modify the transaction for the sighash
+// This function will be used in the create_sighash function
+
+fn modify_tx_for_sighash(serialized_tx: Vec<u8>, input_index: usize, sighash_type: u32) -> Result<Vec<u8>, Box<dyn Error>> {
+    let mut modified_tx = serialized_tx.clone();
+
+    // match sighash_type {
+    //     SIGHASH_ALL => {
+    //         // For SIGHASH_ALL, all inputs and outputs are signed, so no modification is needed
+    //     }
+    //     SIGHASH_NONE => {
+    //         // For SIGHASH_NONE, none of the outputs are signed
+    //         // You need to remove the outputs from the serialized transaction
+    //     }
+    //     SIGHASH_SINGLE => {
+    //         // For SIGHASH_SINGLE, only the output with the same index as the input is signed
+    //         // You need to remove all other outputs from the serialized transaction
+    //     }
+    //     SIGHASH_ALL | SIGHASH_ANYONECANPAY => {
+    //         // For SIGHASH_ALL | SIGHASH_ANYONECANPAY, all outputs and only one input is signed
+    //         // You need to remove all other inputs from the serialized transaction
+    //     }
+    //     _ => {
+    //         // For other sighash types, you need to implement the appropriate modifications
+    //     }
+    // }
+
+    Ok(modified_tx)
+}
+
 
 
 
@@ -179,14 +267,20 @@ fn validate_signature(signature: Vec<u8>, pubkey: Vec<u8>, data: Vec<u8>) -> boo
     // Do i hash the tx data first?
     // let message = Message::from_digest_slice(&data).unwrap()?;
 
-    let message = Message::from_digest_slice(&Sha256::digest(&data))?;
-    let public_key =  PublicKey::from_slice(&pubkey).unwrap()?;
-    let signature = Signature::from_der(&signature).unwrap()?;
+    let message_result = Message::from_digest_slice(&Sha256::digest(&data));
+    let public_key =  PublicKey::from_slice(&pubkey).unwrap();
+    let signature = Signature::from_der(&signature).unwrap();
+
+    // iff getting message fails
+    if message_result.is_err() {
+        return false;
+    }
+    let message = message_result.unwrap();
 
     // Return Ok(true) if the signature is valid, Ok(false) if it's invalid
-    match secp.verify(&message, &signature,  &public_key) {
-        Ok(_) => Ok(true),
-        Ok(_) => Ok(false),
+    match secp.verify_ecdsa(&message, &signature,  &public_key) {
+        Ok(_) => true,
+        Err(_) => false,
     }
 }
 
@@ -206,6 +300,7 @@ fn verify_script(script: &str) -> bool {
     let mut stack: Vec<Vec<u8>> = Vec::new();
 
     // Loop through the script and match the OP_CODEs
+    // Need to add a few like OP_CHECKSIG and OP_CHECKMULTISIG
     for op in script.split_whitespace() {
         match op {
             "OP_DUP" => {
@@ -311,4 +406,22 @@ fn main() {
 // Second line: The serialized coinbase transaction.
 // Following lines: The transaction IDs (txids) of the transactions mined in the block, in order.
 //  The first txid should be that of the coinbase transaction
+
+
+
+// Tmorrow I'll  add some tests to see if my validate sig fn works
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//
+// Get actual signature, pubkey and data from learnmeabitcoin and test
+//     #[test]
+//     fn test_validate_signature() {
+//         let signature = vec![...];
+//         let pubkey = vec![...];
+//         let data = vec![...];
+//
+//         assert!(validate_signature(signature, pubkey, data));
+//     }
+// }
 
