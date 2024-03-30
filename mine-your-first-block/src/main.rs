@@ -418,7 +418,7 @@ fn append_to_file(filename: &str, contents: &str) -> io::Result<()> {
 
 fn generate_output_file(block_header: &str, coinbase_tx:&str, txids_vec: &Vec<&str>)
     -> io::Result<()> {
-    let file = "output.txt";
+    let file = "../output.txt";
 
     std::fs::write(file, "")?;
 
