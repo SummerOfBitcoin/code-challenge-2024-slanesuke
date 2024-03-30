@@ -3,8 +3,10 @@ use serde::Deserialize;
 use serde_json;
 use sha2::{Digest as ShaDigest, Sha256};
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use ripemd::{Digest as RipemdDigest, Ripemd160};
+use std::fs::OpenOptions;
+
 
 // Unsure if i need to use the extern crate for secp256k1
 extern crate secp256k1;
@@ -56,8 +58,6 @@ struct Vout {
 
 
 
-
-// TODO Make a deserialize_tx function with serde and serde_json
 // First just  working  with one tx so I can learn
 fn deserialize_tx(filename: &str) -> Result<Transaction, Box<dyn Error>> {
     //  Open the file of a tx
@@ -225,7 +225,7 @@ fn write_varint(value: u64, buf: &mut Vec<u8>) -> Result<(), Box<dyn Error>> {
 }
 
 // Helper function to modify the transaction for the sighash
-// This function will be used in the create_sighash function
+// This function will be used in the create_sighash function AHHH
 
 fn modify_tx_for_sighash(serialized_tx: Vec<u8>, input_index: usize, sighash_type: u32) -> Result<Vec<u8>, Box<dyn Error>> {
     let mut modified_tx = serialized_tx.clone();
@@ -337,10 +337,25 @@ fn verify_script(script: &str) -> bool {
                 }
             }
             "OP_CHECKSIG" => {
+                // If the stack has less than two items return false
+                if stack.len() < 2 {
+                    return false;
+                }
+                // otherwise pop the last two items from the stack (pubkey and signature)
+                // and validate the signature
+                let pubkey = stack.pop().unwrap();
+                let signature = stack.pop().unwrap();
+
+                // using a place holder for transaction data for now
+                let is_valid_signature = validate_signature(signature, pubkey, Vec::new());
+
+                // verify_signature will return true if the signature is valid
+                // otherwise false
+                return is_valid_signature;
 
             }
             "OP_CHECKMULTISIG" => {
-
+                // TODO
             }
 
             _ => {
@@ -356,10 +371,15 @@ fn verify_script(script: &str) -> bool {
     stack.len() == 1 && !stack.is_empty()
 }
 
+// TODO
+// Implement the BlockHeader function! Need to add the serialized block header to output.txt
 
+// TODO
+// Implement the CoinbaseTx function! Need to add the serialized coinbase tx to output.txt
 
-
-
+// TODO
+// Need to get my head together and figure out how to simplify and verify the .json transactions
+// Need to then just get ther txid's and put them in a vec to add to output.txt
 
 
 
@@ -383,20 +403,70 @@ fn sha256(data: Vec<u8>) -> Vec<u8> {
 
 
 
+/// Creating the file
+// This function will create a file with the given filename and write contents to it
+fn append_to_file(filename: &str, contents: &str) -> io::Result<()> {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .append(true)
+        .create(true)
+        .open(filename)?;
 
+    writeln!(file, "{}", contents)?;
+    Ok(())
+}
 
+fn generate_output_file(block_header: &str, coinbase_tx:&str, txids_vec: &Vec<&str>)
+    -> io::Result<()> {
+    let file = "output.txt";
 
+    std::fs::write(file, "")?;
 
+    // FOrmatting the block header
+    let header_border = "+------------------------------------------------------------------+";
+    append_to_file(file, header_border)?;
+    let block_header = format!("|{:^66}|", block_header);
+    append_to_file(file, &block_header)?;
+    append_to_file(file, header_border)?;
 
+    // Formatting the coinbase transaction
+    let coinbase_tx = format!("|{:^66}|", coinbase_tx);
+    append_to_file(file, &coinbase_tx)?;
+    append_to_file(file, header_border)?;
 
-fn main() {
-    // Path to one transaction
-    let path = "../mempool/0a3fd98f8b3d89d2080489d75029ebaed0c8c631d061c2e9e90957a40e99eb4c.json";
-
-    match deserialize_tx(path) {
-        Ok(tx) => println!("Deserialized Transaction is \n {:#?}", tx),
-        Err(e) => eprintln!("Error!!! {}", e),
+    // Formatting the txids
+    for txids in txids_vec {
+        let txid = format!("|{:^66}|", txids);
+        append_to_file(file, &txid)?;
     }
+    append_to_file(file, header_border)?;
+
+    Ok(())
+}
+
+
+
+
+
+
+
+// fn main() {
+//     // Path to one transaction
+//     let path = "../mempool/0a3fd98f8b3d89d2080489d75029ebaed0c8c631d061c2e9e90957a40e99eb4c.json";
+//
+//     match deserialize_tx(path) {
+//         Ok(tx) => println!("Deserialized Transaction is \n {:#?}", tx),
+//         Err(e) => eprintln!("Error!!! {}", e),
+//     }
+// }
+fn main() -> io::Result<()> {
+    let serialized_block_header = "Block header place holder for now";
+    let serialized_coinbase_tx = "Coinbase tx place holder";
+    let txid_list = vec!["txid1 test ", "txid2 test ", "txid3 testtttt"];
+
+    generate_output_file(serialized_block_header, serialized_coinbase_tx, &txid_list)?;
+
+    Ok(())
 }
 
 // TODO: Creating the block output.txt
