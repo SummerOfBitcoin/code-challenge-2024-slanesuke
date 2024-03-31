@@ -376,6 +376,55 @@ fn verify_script(script: &str) -> bool {
 
 // TODO
 // Implement the CoinbaseTx function! Need to add the serialized coinbase tx to output.txt
+fn create_coinbase_tx () -> Transaction {
+    // Hard coding the current block height I see on mempool.space and current block reward
+    let block_height = 837122;
+    let block_reward = 6.25;
+    // adding an address to pay the block reward to
+    let address = String::from("");
+
+    let extra_nonce = String::from("SlanesukeSOBIntern2024");
+
+    let block_scriptsig = format!("{}{}", block_height, extra_nonce);
+
+
+
+    // Coinbase input
+    let coinbase_input = Vin {
+        // No txid for coinbase tx because it's the first transaction in the block
+        txid: String::new(),
+        vout: 0, // No vout for coinbase tx
+        prevout: Prevout {
+            scriptpubkey: String::new(),
+            scriptpubkey_asm: String::new(),
+            scriptpubkey_type: String::new(),
+            scriptpubkey_address: String::new(),
+            value: 0,
+        },
+        scriptsig: block_scriptsig,
+        scriptsig_asm: String::new(),
+        witness: Vec::new(),
+        is_coinbase: true,
+        sequence: 0xFFFFFFFF, // Max sequence number for coinbase tx
+    };
+
+    let coinbase_output = Vout {
+        scriptpubkey: address.clone(),  // Should this be a script that pays to my address?
+        scriptpubkey_asm: String::new(),
+        scriptpubkey_type: String::new(), // Should this be the public key hash?
+        scriptpubkey_address: address,
+        value: block_reward as u64, // I need to add the transaction fee to this
+    };
+
+
+
+    Transaction {
+        version: 1,
+        locktime: 0,
+        vin: vec![coinbase_input], // Place-holder but will be empty
+        vout: vec![coinbase_output], // Place-holder but will be the block reward
+    }
+}
 
 // TODO
 // Need to get my head together and figure out how to simplify and verify the .json transactions
@@ -460,11 +509,22 @@ fn generate_output_file(block_header: &str, coinbase_tx:&str, txids_vec: &Vec<&s
 //     }
 // }
 fn main() -> io::Result<()> {
+
+
+
     let serialized_block_header = "Block header place holder for now";
-    let serialized_coinbase_tx = "Coinbase tx place holder";
+
+
+    let coinbase_tx = create_coinbase_tx();
+    let serialized_coinbase_tx = serialize_tx(&coinbase_tx).unwrap();
+    let serialized_coinbase_tx_hex = hex::encode(serialized_coinbase_tx);
+    let serialized_coinbase_tx_hex: &str = &serialized_coinbase_tx_hex;
+
+
     let txid_list = vec!["txid1 test ", "txid2 test ", "txid3 testtttt"];
 
-    generate_output_file(serialized_block_header, serialized_coinbase_tx, &txid_list)?;
+    // generate_output_file(serialized_block_header, serialized_coinbase_tx, &txid_list)?;
+    generate_output_file(serialized_block_header, serialized_coinbase_tx_hex, &txid_list)?;
 
     Ok(())
 }
