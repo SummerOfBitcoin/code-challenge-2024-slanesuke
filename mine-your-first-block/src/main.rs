@@ -374,18 +374,27 @@ fn verify_script(script: &str) -> bool {
 // TODO
 // Implement the BlockHeader function! Need to add the serialized block header to output.txt
 
-// TODO
+// TODO Before I turn it in
 // Implement the CoinbaseTx function! Need to add the serialized coinbase tx to output.txt
+// If the coinbase tx has a segwit tx according to BIP 141: If the block contains segwit transactions, one of
+// the outputs must contain the wTXID commitment
 fn create_coinbase_tx (total_tx_fee: u64) -> Transaction {
     // Hard coding the current block height I see on mempool.space and current block reward
-    let block_height = 837122;
-    let block_reward = 6.25000000; // Block reward in satoshis
+    let block_height: u32 = 837122;
+    let block_height_bytes = block_height.to_le_bytes();
+    let block_height_hex = hex::encode(block_height_bytes);
+
+
+    let block_reward = 625000000; // Block reward in satoshis
     // adding an address to pay the block reward to
     let address = String::from("36tvL5nHzSffbx4v9UhBfyGLWAkBUKyoxn");
 
     let extra_nonce = String::from("SlanesukeSOBIntern2024");
+    let extra_nonce_hex = hex::encode(extra_nonce.as_bytes());
 
-    let block_scriptsig = format!("{}{}", block_height, extra_nonce);
+    // Adding the block height and extra nonce to the coinbase input scriptSig
+    // the block height is in little endian byte order then encoding in hex
+    let block_scriptsig = format!("{}{}", block_height_hex, extra_nonce_hex);
 
 
 
@@ -405,7 +414,10 @@ fn create_coinbase_tx (total_tx_fee: u64) -> Transaction {
         },
         scriptsig: block_scriptsig,
         scriptsig_asm: String::new(),
-        witness: Vec::new(),
+        // Witness reserved value set to 0 for my coinbase tx
+        //BIP 141: If the block contains segwit transactions, one of the outputs must contain the
+        // wTXID commitment
+        witness: vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()],
         is_coinbase: true,
         sequence: 0xFFFFFFFF, // Max sequence number for coinbase tx
     };
@@ -430,7 +442,9 @@ fn create_coinbase_tx (total_tx_fee: u64) -> Transaction {
 }
 
 // TODO
-// Need to get my head together and figure out how to simplify and verify the .json transactions
+// Need to get my head together and figure out how to simplify and verify the .json transactions. After
+// that i need to write a mining algo to efficiently fit the transactions with the highest fees into a block
+// and pass the block fees to coinbase tx so I can add it to the block reward.
 // Need to then just get there txid's and put them in a vec to add to output.txt
 
 
