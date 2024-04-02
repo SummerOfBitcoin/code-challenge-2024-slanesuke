@@ -346,7 +346,7 @@ fn verify_script(script: &str) -> bool {
                 let pubkey = stack.pop().unwrap();
                 let signature = stack.pop().unwrap();
 
-                // using a place holder for transaction data for now
+                // using a place-holder for transaction data for now
                 let is_valid_signature = validate_signature(signature, pubkey, Vec::new());
 
                 // verify_signature will return true if the signature is valid
@@ -376,12 +376,12 @@ fn verify_script(script: &str) -> bool {
 
 // TODO
 // Implement the CoinbaseTx function! Need to add the serialized coinbase tx to output.txt
-fn create_coinbase_tx () -> Transaction {
+fn create_coinbase_tx (total_tx_fee: u64) -> Transaction {
     // Hard coding the current block height I see on mempool.space and current block reward
     let block_height = 837122;
-    let block_reward = 6.25;
+    let block_reward = 6.25000000; // Block reward in satoshis
     // adding an address to pay the block reward to
-    let address = String::from("");
+    let address = String::from("36tvL5nHzSffbx4v9UhBfyGLWAkBUKyoxn");
 
     let extra_nonce = String::from("SlanesukeSOBIntern2024");
 
@@ -392,8 +392,10 @@ fn create_coinbase_tx () -> Transaction {
     // Coinbase input
     let coinbase_input = Vin {
         // No txid for coinbase tx because it's the first transaction in the block
-        txid: String::new(),
-        vout: 0, // No vout for coinbase tx
+        txid: "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+        // The input to a coinbase transaction doesn't reference any existing output, so the VOUT is
+        // just set to the maximum value of 0xFFFFFFFF
+        vout: 0xFFFFFFFF, // I read no vout for coinbase tx
         prevout: Prevout {
             scriptpubkey: String::new(),
             scriptpubkey_asm: String::new(),
@@ -413,14 +415,15 @@ fn create_coinbase_tx () -> Transaction {
         scriptpubkey_asm: String::new(),
         scriptpubkey_type: String::new(), // Should this be the public key hash?
         scriptpubkey_address: address,
-        value: block_reward as u64, // I need to add the transaction fee to this
+        value: block_reward as u64 + total_tx_fee, // I need to add the transaction fee to this
     };
 
 
 
     Transaction {
-        version: 1,
-        locktime: 0,
+        version: 01000000, // Instead of 1 I'm using 01000000 I believe this is correct based off
+                           // the mempool tx's same with locktime
+        locktime: 00000000,
         vin: vec![coinbase_input], // Place-holder but will be empty
         vout: vec![coinbase_output], // Place-holder but will be the block reward
     }
@@ -428,7 +431,7 @@ fn create_coinbase_tx () -> Transaction {
 
 // TODO
 // Need to get my head together and figure out how to simplify and verify the .json transactions
-// Need to then just get ther txid's and put them in a vec to add to output.txt
+// Need to then just get there txid's and put them in a vec to add to output.txt
 
 
 
@@ -514,8 +517,8 @@ fn main() -> io::Result<()> {
 
     let serialized_block_header = "Block header place holder for now";
 
-
-    let coinbase_tx = create_coinbase_tx();
+    let total_tx_fee = 0; // Place-holder for now because I need to somehow calculate the tx fee
+    let coinbase_tx = create_coinbase_tx(total_tx_fee);
     let serialized_coinbase_tx = serialize_tx(&coinbase_tx).unwrap();
     let serialized_coinbase_tx_hex = hex::encode(serialized_coinbase_tx);
     let serialized_coinbase_tx_hex: &str = &serialized_coinbase_tx_hex;
