@@ -378,16 +378,22 @@ fn verify_script(script: &str) -> bool {
 // Implement the CoinbaseTx function! Need to add the serialized coinbase tx to output.txt
 // If the coinbase tx has a segwit tx according to BIP 141: If the block contains segwit transactions, one of
 // the outputs must contain the wTXID commitment
-fn create_coinbase_tx (total_tx_fee: u64) -> Transaction {
+fn create_coinbase_tx (total_tx_fee: u64) -> String {
     // Hard coding the current block height I see on mempool.space and current block reward
     let block_height: u32 = 837122;
     let block_height_bytes = block_height.to_le_bytes();
     let block_height_hex = hex::encode(block_height_bytes);
 
 
-    let block_reward = 625000000; // Block reward in satoshis
+    let block_sub_plus_fees: u64 = 625000000 + total_tx_fee; // Block reward in satoshis
+    let block_reward_bytes = block_sub_plus_fees.to_le_bytes();
+    let block_reward_hex = hex::encode(block_reward_bytes);
+
     // adding an address to pay the block reward to
     let address = String::from("36tvL5nHzSffbx4v9UhBfyGLWAkBUKyoxn");
+    // Same address converted to hex for serialization
+    let address = "053918f36132b92f65c11de2deeccf2f0b35177df3297ed5db".to_string();
+
 
     let extra_nonce = String::from("SlanesukeSOBIntern2024");
     let extra_nonce_hex = hex::encode(extra_nonce.as_bytes());
@@ -398,47 +404,25 @@ fn create_coinbase_tx (total_tx_fee: u64) -> Transaction {
 
 
 
-    // Coinbase input
-    let coinbase_input = Vin {
-        // No txid for coinbase tx because it's the first transaction in the block
-        txid: "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
-        // The input to a coinbase transaction doesn't reference any existing output, so the VOUT is
-        // just set to the maximum value of 0xFFFFFFFF
-        vout: 0xFFFFFFFF, // I read no vout for coinbase tx
-        prevout: Prevout {
-            scriptpubkey: String::new(),
-            scriptpubkey_asm: String::new(),
-            scriptpubkey_type: String::new(),
-            scriptpubkey_address: String::new(),
-            value: 0,
-        },
-        scriptsig: block_scriptsig,
-        scriptsig_asm: String::new(),
-        // Witness reserved value set to 0 for my coinbase tx
-        //BIP 141: If the block contains segwit transactions, one of the outputs must contain the
-        // wTXID commitment
-        witness: vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()],
-        is_coinbase: true,
-        sequence: 0xFFFFFFFF, // Max sequence number for coinbase tx
-    };
-
-    let coinbase_output = Vout {
-        scriptpubkey: address.clone(),  // Should this be a script that pays to my address?
-        scriptpubkey_asm: String::new(),
-        scriptpubkey_type: String::new(), // Should this be the public key hash?
-        scriptpubkey_address: address,
-        value: block_reward as u64 + total_tx_fee, // I need to add the transaction fee to this
-    };
+    // Finish manually serializing the coinbase tx.
+    // Left off concantingating the scriptPubKey SIze
+    // The address might need to be in hex
+    let version = "01000000".to_string();
+    let input_count = "01".to_string();
+    let txid = "0000000000000000000000000000000000000000000000000000000000000000";
+    let vout = "ffffffff";
+    let scriptsig_size = format!("{:02x}", block_scriptsig.len()/2);
+    let sequence = "ffffffff";
+    let output_count = "01".to_string();
+    let scriptpubkey_size = format!("{:02x}", address.len()/2);
+    let locktime = "00000000";
 
 
+    let serialized_coinbase_tx = format!("{}{}{}{}{}{}{}{}{}{}{}{}", version, input_count, txid,
+        vout, scriptsig_size, block_scriptsig, sequence, output_count, block_reward_hex, scriptpubkey_size,
+    address, locktime);
 
-    Transaction {
-        version: 01000000, // Instead of 1 I'm using 01000000 I believe this is correct based off
-                           // the mempool tx's same with locktime
-        locktime: 00000000,
-        vin: vec![coinbase_input], // Place-holder but will be empty
-        vout: vec![coinbase_output], // Place-holder but will be the block reward
-    }
+    serialized_coinbase_tx
 }
 
 // TODO
@@ -482,7 +466,7 @@ fn append_to_file(filename: &str, contents: &str) -> io::Result<()> {
     Ok(())
 }
 
-fn generate_output_file(block_header: &str, coinbase_tx:&str, txids_vec: &Vec<&str>)
+fn generate_output_file(block_header: &str, coinbase_tx: String, txids_vec: &Vec<&str>)
     -> io::Result<()> {
     let file = "../output.txt";
 
@@ -532,16 +516,14 @@ fn main() -> io::Result<()> {
     let serialized_block_header = "Block header place holder for now";
 
     let total_tx_fee = 0; // Place-holder for now because I need to somehow calculate the tx fee
-    let coinbase_tx = create_coinbase_tx(total_tx_fee);
-    let serialized_coinbase_tx = serialize_tx(&coinbase_tx).unwrap();
-    let serialized_coinbase_tx_hex = hex::encode(serialized_coinbase_tx);
-    let serialized_coinbase_tx_hex: &str = &serialized_coinbase_tx_hex;
+    let coinbase_tx: String = create_coinbase_tx(total_tx_fee);
+
 
 
     let txid_list = vec!["txid1 test ", "txid2 test ", "txid3 testtttt"];
 
     // generate_output_file(serialized_block_header, serialized_coinbase_tx, &txid_list)?;
-    generate_output_file(serialized_block_header, serialized_coinbase_tx_hex, &txid_list)?;
+    generate_output_file(serialized_block_header, coinbase_tx, &txid_list)?;
 
     Ok(())
 }
