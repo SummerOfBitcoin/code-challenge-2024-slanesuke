@@ -1,9 +1,14 @@
+// TODO
+// 1. Start by cleaning up and corectingg the verify_script function.
+
+
+
 use std::fmt::Debug;
 use serde::Deserialize;
 use serde_json;
 use sha2::{Digest as ShaDigest, Sha256};
 use std::fs::File;
-use std::io::{self, Read, Write};
+use std::io::{self, Read, read_to_string, Write};
 use ripemd::{Digest as RipemdDigest, Ripemd160};
 use std::fs::OpenOptions;
 
@@ -92,8 +97,12 @@ fn validate_tx(transaction: &Transaction) -> Result<bool, Box<dyn Error>> {
 
     // Verify if scriptpubkey_asm returns true
     // will this work as for outputs in transaction outputs? verify if this is correct
+    // I also added in the sciptpubkey_type to verify the scriptpubkey_asm, I hope this makes sense\
+    // The for loop may need changing.
+    // I need to send in the script sig to verify that is why there is an  error because scriptsig
+    // is in vin
     for vout in &transaction.vout {
-        if !verify_script(&vout.scriptpubkey_asm) {
+        if !verify_script(&vout.scriptpubkey_asm, &vout.scriptpubkey_type, ) {
             return Ok(false);
         }
     }
@@ -109,7 +118,7 @@ fn validate_tx(transaction: &Transaction) -> Result<bool, Box<dyn Error>> {
 
 
 
-        if !validate_signature(signature, public_key, signed_data) {
+        if !verify_signature(signature, public_key, signed_data) {
             return Err("Signature verification failed".into())
         }
     }
@@ -118,7 +127,7 @@ fn validate_tx(transaction: &Transaction) -> Result<bool, Box<dyn Error>> {
     Ok(true)
 }
 
-
+// THis function is wrong and lamee
 fn get_signature_and_pubkey_and_sighash_type(scriptsig_asm: &str) -> Result<(Vec<u8>, Vec<u8>, u8), Box<dyn Error>> {
     // Parse the scriptsig_asm to get the signature and pubkey
     // The signature is the first element in the scriptsig_asm
@@ -257,15 +266,33 @@ fn modify_tx_for_sighash(serialized_tx: Vec<u8>, input_index: usize, sighash_typ
 
 
 
-
+// TO get The message for verifying the signature
+// serialize the transaction as per the input address type (scriptpubkey_type in the prevout)
+// append the sighash_type (present at the end of the signature you are verifying) at the end of the trimmed tx byte sequence
+// double hash 256(trimmed_tx)
+// parse the signature, publickey, tx_hash into SIGNATURE, PUBLIC KEY and MESSAGE objects using Secp256k1 libraries,
+// then verify the message against the public key and signature  using ecdsa verification functions
+//
+// basic procedure is this, you have do research for the whole thing.
 // TODO Make a function that validates the signature of a transaction
-fn validate_signature(signature: Vec<u8>, pubkey: Vec<u8>, data: Vec<u8>) -> bool {
+
+// to get the sighash_type, its the last two bytes;
+// let sighash_type = &signature[signature.len()-2..];
+
+// 0x01 = SIGHASH_ALL
+// 0x02 = SIGHASH_NONE
+// 0x03 = SIGHASH_SINGLE
+// 0x81 = SIGHASH_ANYONECANPAY | SIGHASH_ALL
+// 0x82 = SIGHASH_ANYONECANPAY | SIGHASH_NONE
+// 0x83 = SIGHASH_ANYONECANPAY | SIGHASH_SINGLE
+
+// Left off Needing to serialize the p2pkh transaction to get the message and verify the sig
+fn verify_signature(signature: Vec<u8>, pubkey: Vec<u8>, data: Vec<u8>) -> bool {
     //  Creating a new secp256k1 object
-    let secp = Secp256k1::new();
+    let secp = Secp256k1::verification_only();
 
     // Creating a message, public key and signature
-    // Do i hash the tx data first?
-    // let message = Message::from_digest_slice(&data).unwrap()?;
+
 
     let message_result = Message::from_digest_slice(&Sha256::digest(&data));
     let public_key =  PublicKey::from_slice(&pubkey).unwrap();
@@ -286,86 +313,253 @@ fn validate_signature(signature: Vec<u8>, pubkey: Vec<u8>, data: Vec<u8>) -> boo
 
 
 
+fn get_signature_and_publickey_from_scriptsig_legacytx(scriptsig: &str) -> Option<(String, String)> {
+    //
+    let scriptsig_bytes = match hex::decode(scriptsig) {
+        Ok(bytes) => bytes,
+        Err(_) => return None,
+    };
+
+    let mut index = 0;
+    let mut sig_and_pubkey_vec = Vec::new();
+
+    // Loop through the scriptsig bytes to parse
+    while index < scriptsig_bytes.len() {
+        if index+1 >= scriptsig_bytes.len() {
+            break;
+        }
+
+        let length = scriptsig_bytes[index] as usize; // This byte is the length of data to push (sig or pub)
+        index += 1; // Move to the next byte
+
+        // Checks if the length is greater than the remaining bytes in the scriptsig
+        if index + length > scriptsig_bytes.len() {
+            break;
+        }
+
+        // Get the data of the opcode length
+        let data = &scriptsig_bytes[index..index+length];
+        index+=length; // Move the index to the next opcode
+
+        sig_and_pubkey_vec.push(hex::encode(data));
+    }
+    // Checking if the sig_and_pubkey_vec has two elements if not fail
+    if sig_and_pubkey_vec.len() == 2 {
+        Some((sig_and_pubkey_vec[0].clone(), sig_and_pubkey_vec[1].clone()))
+    } else {
+        None
+    }
+}
+
 
 
 
 
 
 // TODO make a function that verifies if a script returns OK
-fn verify_script(script: &str) -> bool {
+// Need to send in scriptpubkey_asm and verify it, I believe the scriptpubkey_type will
+// tell me witch script to use  and match against. I will need to add a few more operators
+
+// For example if scriptpubkey_type == p2ms then check if OP_0 is first and OP_CHECKMULTISIG ect.
+// https://learnmeabitcoin.com/technical/transaction/input/scriptsig/
+
+fn verify_script(scriptpubkey_asm: &str, script_type: &str, scriptsig: &str) -> bool {
     // Verify the script based off grokking bitcoin chapter 5
     // look over OP_CODES or operators
 
     // Making a stack for the op_code opperation
     let mut stack: Vec<Vec<u8>> = Vec::new();
 
-    // Loop through the script and match the OP_CODEs
-    // Need to add a few like OP_CHECKSIG and OP_CHECKMULTISIG
-    for op in script.split_whitespace() {
-        match op {
-            "OP_DUP" => {
-                // If the stack is empty return false
-                // Otherwise clone the last item on the stack and push it to the stack
-                if let Some(data) = stack.last() {
-                    stack.push(data.clone())
-                } else {
+    // First I want to check the scriptpub_key type so I preform the right script verification.
+    // for each case.
+    // Include v1_p2tr , v0_p2wpkh , p2sh , p2pkh,  and p2wsh
+
+    //  P2PK, P2PKH, P2MS, P2SH, OP_RETURN  Are all unlocked via the scriptsig field
+    // P2WPKH, P2WSH, P2TR are all unlocked via the witness field
+
+    //A script is valid if the only element left on the stack is a OP_1 or greater.
+    //
+    // A script is invalid if:
+    // The final stack is empty
+    // The only element left on the stack is OP_0
+    // There is more than one element left on the stack at the end of execution.
+    // The script exits prematurely (e.g. OP_RETURN).
+
+    // A locking script (ScriptPubKey) is placed on every output you create in a transaction
+
+    // An unlocking script (ScriptSig or Witness) is provided for every input you want to spend in a transaction
+
+    //Every node will then combine and run these two scripts for each input in every transaction
+    // they receive to make sure they validate. If the unlocking scripts on inputs do not successfully
+    // unlock the locking scripts on the outputs being spent, then the transaction is considered invalid
+    // and will not be relayed or mined in to a block.
+
+    //Even though the unlocking script is provided after the initial locking script (in terms of raw
+    // transactions), we actually put the unlocking script first when we execute the full script
+    match script_type {
+        "p2pkh" => {
+            let (signature, pubkey) = match get_signature_and_publickey_from_scriptsig_legacytx(scriptsig) {
+                Some((sig, pk)) => (sig, pk),
+                None => {
+                    eprintln!("Failed to parse scriptsig");
                     return false
-                }
-            }
-            "OP_HASH160"  => {
-                // If the stack is empty return false
-                // Otherwise take the last item from the stack, hash it with sha256 then ripemd160
-                // and push it to the stack
-                if let Some(pubkey) = stack.pop() {
-                    let hash = ripemd160(sha256(pubkey.clone()));
-                    stack.push(hash);
-                } else {
-                    return false
-                }
-            }
-            "OP_EQUALVERIFY" => {
-                // if stack is less than 2 return false
-                if stack.len() < 2 {
-                    return false;
-                }
-                // Otherwise pop the last two items from the stack and compare them
-                // if they are not equal return false, if they are just continue
-                let stack_item1 = stack.pop().unwrap();
-                let stack_item2 = stack.pop().unwrap();
-                if stack_item1 != stack_item2 {
-                    return false;
-                }
-            }
-            "OP_CHECKSIG" => {
-                // If the stack has less than two items return false
-                if stack.len() < 2 {
-                    return false;
-                }
-                // otherwise pop the last two items from the stack (pubkey and signature)
-                // and validate the signature
-                let pubkey = stack.pop().unwrap();
-                let signature = stack.pop().unwrap();
+                },
+            };
 
-                // using a place-holder for transaction data for now
-                let is_valid_signature = validate_signature(signature, pubkey, Vec::new());
+            // First push the scriptsig to the stack (sig and pubkey)
+            stack.push(hex::decode(signature).unwrap());
+            stack.push(hex::decode(pubkey).unwrap());
 
-                // verify_signature will return true if the signature is valid
-                // otherwise false
-                return is_valid_signature;
+            for op in scriptpubkey_asm.split_whitespace() {
+                match op {
+                    "OP_DUP" => {
+                        // If the stack is empty return false
+                        // Otherwise clone the last item on the stack and push it to the stack
+                        if let Some(data) = stack.last() {
+                            stack.push(data.clone())
+                        } else {
+                            return false
+                        }
+                    }
+                    "OP_HASH160"  => {
+                        // If the stack is empty return false
+                        // Otherwise take the last item from the stack, hash it with sha256 then ripemd160
+                        // and push it to the stack
+                        if let Some(pubkey) = stack.pop() {
+                            let hash = ripemd160(sha256(pubkey.clone()));
+                            stack.push(hash);
+                        } else {
+                            return false
+                        }
+                    }
+                    "OP_EQUALVERIFY" => {
+                        // if stack is less than 2 return false
+                        if stack.len() < 2 {
+                            return false;
+                        }
+                        // Otherwise pop the last two items from the stack and compare them
+                        // if they are not equal return false, if they are just continue
+                        let stack_item1 = stack.pop().unwrap();
+                        let stack_item2 = stack.pop().unwrap();
+                        if stack_item1 != stack_item2 {
+                            return false;
+                        }
+                    }
+                    "OP_CHECKSIG" => {
+                        // If the stack has less than two items return false
+                        if stack.len() < 2 {
+                            return false;
+                        }
+                        // otherwise pop the last two items from the stack (pubkey and signature)
+                        // and validate the signature
+                        let pubkey = stack.pop().unwrap();
+                        let signature = stack.pop().unwrap();
+
+                        // using a place-holder for transaction data for now
+                        let is_valid_signature = verify_signature(signature, pubkey, Vec::new());
+
+                        // verify_signature will return true if the signature is valid
+                        // otherwise false
+                        return is_valid_signature;
+                    }
+                    _ => {
+                        // If it's not an operator,it'a ordinary data (like sig or pubkey) and push it onto the stack
+                        // Verify !!!
+                        let data = hex::decode(op).unwrap_or_default(); // Convert hex string to bytes
+                        stack.push(data);
+                    }
+                }
 
             }
-            "OP_CHECKMULTISIG" => {
-                // TODO
-            }
-
-            _ => {
-                // If it's not an operator,it'a ordinary data (like sig or pubkey) and push it onto the stack
-                // Verify !!!
-                let data = hex::decode(op).unwrap_or_default(); // Convert hex string to bytes
-                stack.push(data);
-            }
+            // Check final result
+            // If the stack has only one element and it's not empty, transaction is valid
+            stack.len() == 1 && !stack.is_empty()
+        }
+        "p2sh" => {
+            todo!()
+        }
+        "v0_p2wpkh" => {
+            todo!()
+        }
+        "p2wsh" => {
+            todo!()
+        }
+        "v1_p2tr" => {
+            todo!()
+        }
+        _ => {
+            // If the script type is not recognized return false
+            return false;
         }
     }
+
+    // Loop through the script and match the OP_CODEs
+    // Need to add a few like OP_CHECKSIG and OP_CHECKMULTISIG
+    // for op in scriptpubkey_asm.split_whitespace() {
+    //     match op {
+    //         "OP_DUP" => {
+    //             // If the stack is empty return false
+    //             // Otherwise clone the last item on the stack and push it to the stack
+    //             if let Some(data) = stack.last() {
+    //                 stack.push(data.clone())
+    //             } else {
+    //                 return false
+    //             }
+    //         }
+    //         "OP_HASH160"  => {
+    //             // If the stack is empty return false
+    //             // Otherwise take the last item from the stack, hash it with sha256 then ripemd160
+    //             // and push it to the stack
+    //             if let Some(pubkey) = stack.pop() {
+    //                 let hash = ripemd160(sha256(pubkey.clone()));
+    //                 stack.push(hash);
+    //             } else {
+    //                 return false
+    //             }
+    //         }
+    //         "OP_EQUALVERIFY" => {
+    //             // if stack is less than 2 return false
+    //             if stack.len() < 2 {
+    //                 return false;
+    //             }
+    //             // Otherwise pop the last two items from the stack and compare them
+    //             // if they are not equal return false, if they are just continue
+    //             let stack_item1 = stack.pop().unwrap();
+    //             let stack_item2 = stack.pop().unwrap();
+    //             if stack_item1 != stack_item2 {
+    //                 return false;
+    //             }
+    //         }
+    //         "OP_CHECKSIG" => {
+    //             // If the stack has less than two items return false
+    //             if stack.len() < 2 {
+    //                 return false;
+    //             }
+    //             // otherwise pop the last two items from the stack (pubkey and signature)
+    //             // and validate the signature
+    //             let pubkey = stack.pop().unwrap();
+    //             let signature = stack.pop().unwrap();
+    //
+    //             // using a place-holder for transaction data for now
+    //             let is_valid_signature = validate_signature(signature, pubkey, Vec::new());
+    //
+    //             // verify_signature will return true if the signature is valid
+    //             // otherwise false
+    //             return is_valid_signature;
+    //
+    //         }
+    //         "OP_CHECKMULTISIG" => {
+    //             // TODO
+    //         }
+    //
+    //         _ => {
+    //             // If it's not an operator,it'a ordinary data (like sig or pubkey) and push it onto the stack
+    //             // Verify !!!
+    //             let data = hex::decode(op).unwrap_or_default(); // Convert hex string to bytes
+    //             stack.push(data);
+    //         }
+    //     }
+    // }
     // Check final result
     // If the stack has only one element and it's not empty, transaction is valid
     stack.len() == 1 && !stack.is_empty()
@@ -374,10 +568,14 @@ fn verify_script(script: &str) -> bool {
 // TODO
 // Implement the BlockHeader function! Need to add the serialized block header to output.txt
 
+
+
 // TODO Before I turn it in
 // Implement the CoinbaseTx function! Need to add the serialized coinbase tx to output.txt
-// If the coinbase tx has a segwit tx according to BIP 141: If the block contains segwit transactions, one of
-// the outputs must contain the wTXID commitment
+// If the coinbase tx has a segwit tx according to BIP 141: all coinbase transactions since the segwit
+// upgrade need to include a witness reserved value in
+// the witness field for the input, and then use that along with a witness root hash to put a wTXID
+// commitment in the ScriptPubKey of one of the outputs in the transaction.
 fn create_coinbase_tx (total_tx_fee: u64) -> String {
     // Hard coding the current block height I see on mempool.space and current block reward
     let block_height: u32 = 837122;
@@ -447,7 +645,6 @@ fn sha256(data: Vec<u8>) -> Vec<u8> {
     hasher.update(data);
     hasher.finalize().to_vec()
 }
-
 
 
 
@@ -528,29 +725,4 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-// TODO: Creating the block output.txt
-// the script must generate an output file named output.txt with the following structure:
-//
-// First line: The block header.
-// Second line: The serialized coinbase transaction.
-// Following lines: The transaction IDs (txids) of the transactions mined in the block, in order.
-//  The first txid should be that of the coinbase transaction
-
-
-
-// Tmorrow I'll  add some tests to see if my validate sig fn works
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//
-// Get actual signature, pubkey and data from learnmeabitcoin and test
-//     #[test]
-//     fn test_validate_signature() {
-//         let signature = vec![...];
-//         let pubkey = vec![...];
-//         let data = vec![...];
-//
-//         assert!(validate_signature(signature, pubkey, data));
-//     }
-// }
 
