@@ -239,6 +239,10 @@ fn serialize_tx(transaction: &Transaction) -> Result<String, Box<dyn Error>> {
         serialized_tx.push_str(&vout.scriptpubkey);
     }
 
+    let lock = &transaction.locktime.to_le_bytes();
+    let lock_hex = hex::encode(lock);
+    serialized_tx.push_str(&lock_hex);
+
     // let txid = hex::decode(&transaction.vin[0].txid)?;
     // serialized_tx.push_str(&hex::encode(txid));
 
