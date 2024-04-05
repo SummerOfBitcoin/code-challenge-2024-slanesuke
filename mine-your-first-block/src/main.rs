@@ -1,6 +1,5 @@
-// TODO
-// 1. Start by cleaning up and corectingg the verify_script function.
-
+/// TODO
+/// FIGURE OUT HOW TO VERIFY THE SIGNATURE OF A TRANSACTION UGHH
 
 
 use std::fmt::Debug;
@@ -9,7 +8,8 @@ use serde_json;
 use sha2::{Digest as ShaDigest, Sha256};
 use std::fs::File;
 use std::io::{self, Read, read_to_string, Write};
-use ripemd::{Digest as RipemdDigest, Ripemd160};
+use ripemd::Ripemd160;
+// use ripemd::{Digest as RipemdDigest, Ripemd160};
 use std::fs::OpenOptions;
 
 
@@ -95,88 +95,19 @@ fn validate_tx(transaction: &Transaction) -> Result<bool, Box<dyn Error>> {
         return Ok(false);
     }
 
-    // Verify if scriptpubkey_asm returns true
-    // will this work as for outputs in transaction outputs? verify if this is correct
-    // I also added in the sciptpubkey_type to verify the scriptpubkey_asm, I hope this makes sense\
-    // The for loop may need changing.
-    // I need to send in the script sig to verify that is why there is an  error because scriptsig
-    // is in vin
-    // Right now there is a placeholder
-    for vout in &transaction.vout {
-        if !verify_script(&vout.scriptpubkey_asm, &vout.scriptpubkey_type, "") {
-            return Ok(false);
-        }
-    }
-
-    // Use  validate_signature function to verify the signature of the transaction
-    for vin in &transaction.vin {
-        // Parse signature, pubkey and data
-
-
-        // let signed_data = create_sighash(transaction, vin.vout as usize);
-        let (signature, public_key, sighash_type) = get_signature_and_pubkey_and_sighash_type(&vin.scriptsig_asm)?;
-        // let signed_data = create_sighash(transaction, vin.vout as usize, sighash_type as u32)?;
-
-
-        //
-        // if !verify_signature(signature, public_key, signed_data) {
-        //     return Err("Signature verification failed".into())
-        // }
-    }
-
-    // if all verifications pass the transaction is validated and returns true or OK
-    Ok(true)
-}
-
-// THis function is wrong and lamee
-fn get_signature_and_pubkey_and_sighash_type(scriptsig_asm: &str) -> Result<(Vec<u8>, Vec<u8>, u8), Box<dyn Error>> {
-    // Parse the scriptsig_asm to get the signature and pubkey
-    // The signature is the first element in the scriptsig_asm
-    // The pubkey is the second element
-    let parts: Vec<&str> = scriptsig_asm.split_whitespace().collect();
-
-    if parts.len() < 2 {
-        return Err("scriptsig_asm format is invalid".into());
-    }
-
-    // Remove the OP_PUSHBYTES_71 or OP_PUSHBYTES_72 prefix if it's there
-    let signature_hex = parts[0].trim_start_matches("OP_PUSHBYTES_71    ")
-        .trim_start_matches("OP_PUSHBYTES_72");
-    let pubkey_hex = parts[1].trim_start_matches("OP_PUSHBYTES_33");
-
-    let signature = hex::decode(signature_hex)?;
-    let pubkey = hex::decode(pubkey_hex)?;
-
-    let sighash_type = signature.last().clone().unwrap_or(&0);
-
-    Ok((signature.clone(), pubkey, *sighash_type))
+    // // if all verifications pass the transaction is validated and returns true or OK
+     Ok(true)
 }
 
 
 
-// fn create_sighash(transaction: &Transaction, input_index: usize, sighash_type: u32) -> Result<Vec<u8>, Box<dyn Error>> {
-//     // This function needs to create a sighash for a transaction
-//
-//
-//     //STILL NEED TO VERIFY THIS AND WORK ON SERIALIZATION
-//
-//     let serialized_tx = serialize_tx(transaction).unwrap();
-//
-//     let modified_tx = modify_tx_for_sighash(serialized_tx, input_index,  sighash_type).unwrap();
-//
-//     let sighash = sha256(sha256(modified_tx));
-//
-//     Ok(sighash)
-// }
-
-/// This serialize_tx function only works for legacy transactions I THINK
+/// This serialize_tx function only works for legacy transactions
 /// I believe i need to add 00 for an empty witness field?
 fn serialize_tx(transaction: &Transaction) -> Result<String, Box<dyn Error>> {
     // This function needs to serialize the transaction into bytes
 
-    // THis is what a raw tx looks like
-    // 0100000001400b0f8fa472bcbbeea13ed27f8755f7f707c75bca39c58484ceb58e38a690a8000000006a47304402205ace3db3f8de8ec4fedc4f9b0cc7c1cd6e11e889dc4ddfa44c72ba988736e27e02203cd5762ed6f5456db71c20977061c145038ddacb9880e4fab283279ef9a14abe012102f20b1c1044b2479019238308f97751fb9202faf4524c6f186dda04edfc983bd6feffffff02955cb80b000000001976a9147a10c04d428d562117461fb8eaaa5ff08a96a7c288aca16079a1090000001976a914da6231bd6faced261f75b281bb794b6e1de3f6aa88acc7020700
 
+    // Returning the serialized tx as a string
     let mut serialized_tx = String::new();
 
     // Serialize version field, little endian
@@ -195,17 +126,8 @@ fn serialize_tx(transaction: &Transaction) -> Result<String, Box<dyn Error>> {
         serialized_tx.push_str(&hex::encode(vout));
 
 
-        // If no witness feild is given push 00
-        // On second look there may be no witness feild  in these tx for legacy
-        // if vin.witness.is_empty() {
-        //     serialized_tx.push_str("00");
-        // }
-
         // Serialize scriptSig size I kept getting trailing zeros after my compactsize hex
         let scriptsig_size = vin.scriptsig.len() / 2;
-        // let scriptsig_size_bytes = (scriptsig_size as u64).to_le_bytes();
-        // let scriptsig_size_hex = hex::encode(scriptsig_size_bytes);
-        // serialized_tx.push_str(&scriptsig_size_hex);
 
         // So I had to do this to remove the trailing zeros
         // It basically converts the u64 to bytes then to a vec then removes the trailing zeros
@@ -227,7 +149,7 @@ fn serialize_tx(transaction: &Transaction) -> Result<String, Box<dyn Error>> {
         serialized_tx.push_str(&sequence_hex);
     }
 
-    //  The ouput count has to be outside of the vout loop because it's a single byte before it
+    //  The output count has to be outside the vout loop because it's a single byte before it
     // was inside
     let vout_count = transaction.vout.len() as u64;
     serialized_tx.push_str(&format!("{:02x}", vout_count));
@@ -259,8 +181,8 @@ fn serialize_tx(transaction: &Transaction) -> Result<String, Box<dyn Error>> {
     Ok(serialized_tx)
 }
 
-// Because Segwit tx's are a serialized differently I decided to make a different function
 
+/// Segwit tx serialization function
 fn serialized_segwit_tx(transaction: &Transaction) -> Result<String, Box<dyn Error>> {
     let mut serialized_tx = String::new();
 
@@ -291,12 +213,9 @@ fn serialized_segwit_tx(transaction: &Transaction) -> Result<String, Box<dyn Err
             serialized_tx.push_str("00");
         } else {
             /// Otherwise it's a tx with both legacy and segwit inputs so I have to add the scriptsig
-
+            // Coppied from the legacy serialize_tx function
             // Serialize scriptSig size I kept getting trailing zeros after my compactsize hex
             let scriptsig_size = vin.scriptsig.len() / 2;
-            // let scriptsig_size_bytes = (scriptsig_size as u64).to_le_bytes();
-            // let scriptsig_size_hex = hex::encode(scriptsig_size_bytes);
-            // serialized_tx.push_str(&scriptsig_size_hex);
 
             // So I had to do this to remove the trailing zeros
             // It basically converts the u64 to bytes then to a vec then removes the trailing zeros
@@ -360,8 +279,6 @@ fn serialized_segwit_tx(transaction: &Transaction) -> Result<String, Box<dyn Err
 
             }
         }
-
-
     }
 
     // Finally add the locktime
@@ -375,38 +292,6 @@ fn serialized_segwit_tx(transaction: &Transaction) -> Result<String, Box<dyn Err
      Ok(serialized_tx)
 }
 
-
-
-
-// Helper function to modify the transaction for the sighash
-// This function will be used in the create_sighash function AHHH
-//
-// fn modify_tx_for_sighash(serialized_tx: String, input_index: usize, sighash_type: u32) -> Result<Vec<u8>, Box<dyn Error>> {
-//     let mut modified_tx = serialized_tx.clone();
-//
-//     // match sighash_type {
-//     //     SIGHASH_ALL => {
-//     //         // For SIGHASH_ALL, all inputs and outputs are signed, so no modification is needed
-//     //     }
-//     //     SIGHASH_NONE => {
-//     //         // For SIGHASH_NONE, none of the outputs are signed
-//     //         // You need to remove the outputs from the serialized transaction
-//     //     }
-//     //     SIGHASH_SINGLE => {
-//     //         // For SIGHASH_SINGLE, only the output with the same index as the input is signed
-//     //         // You need to remove all other outputs from the serialized transaction
-//     //     }
-//     //     SIGHASH_ALL | SIGHASH_ANYONECANPAY => {
-//     //         // For SIGHASH_ALL | SIGHASH_ANYONECANPAY, all outputs and only one input is signed
-//     //         // You need to remove all other inputs from the serialized transaction
-//     //     }
-//     //     _ => {
-//     //         // For other sighash types, you need to implement the appropriate modifications
-//     //     }
-//     // }
-//
-//     Ok(modified_tx)
-//}
 
 
 
@@ -432,38 +317,60 @@ fn serialized_segwit_tx(transaction: &Transaction) -> Result<String, Box<dyn Err
 // 0x83 = SIGHASH_ANYONECANPAY | SIGHASH_SINGLE
 
 // Left off Needing to serialize the p2pkh transaction to get the message and verify the sig
-fn verify_signature(signature: Vec<u8>, pubkey: Vec<u8>, data: Vec<u8>) -> bool {
+
+/// Working on p2pkh first
+fn verify_signature(
+    signature: Vec<u8>,
+    pubkey: Vec<u8>,
+    mut serialized_tx: String) -> Result<bool, Box<dyn Error>> {
+    // Need to append the sighash_type to the serialized_tx
+    // let sighash_type = &signature[signature.len() - 2..];
+    // serialized_tx.push_str(&hex::encode(sighash_type));
+
+    // I think i'm only appending 2 bytes but it may be 4 bytes i need, 01000000 instead of 01
+    // This is a roundabout way  of doing it and i should fix it or send it the correct value in the first place
+    // let sighash_type = &signature[signature.len() - 2..signature.len()];
+    // let sighash_type_str = std::str::from_utf8(&sighash_type).unwrap();
+    // let sighash_type = u8::from_str_radix(sighash_type_str, 16).unwrap();
+    // let sighash_type_bytes = sighash_type.to_le_bytes();
+    // serialized_tx.push_str(&hex::encode(sighash_type_bytes));
+
+    // I think i'm only appending 2 bytes but it may be 4 bytes i need, 01000000 instead of 01
+
+    // Hashing the serialized tx or message in a Hash256
+    // But first I need to convert the serialized_tx to bytes
+    let hashed_message_bytes = hex::decode(serialized_tx).expect("Decoding failed");
+    let hashed_message = sha256(sha256(hashed_message_bytes));
+    //let hash = hex::encode(hashed_message);
+
     //  Creating a new secp256k1 object
     let secp = Secp256k1::verification_only();
 
     // Creating a message, public key and signature
 
-
-    let message_result = Message::from_digest_slice(&Sha256::digest(&data));
+    let message_result = Message::from_digest_slice(&hashed_message).unwrap();
+    // let message_result = Message::from_digest_slice(&Sha256::digest(&serialized_tx.as_bytes()));
     let public_key =  PublicKey::from_slice(&pubkey).unwrap();
     let signature = Signature::from_der(&signature).unwrap();
 
-    // iff getting message fails
-    if message_result.is_err() {
-        return false;
-    }
-    let message = message_result.unwrap();
+
 
     // Return Ok(true) if the signature is valid, Ok(false) if it's invalid
-    match secp.verify_ecdsa(&message, &signature,  &public_key) {
-        Ok(_) => true,
-        Err(_) => false,
+    match secp.verify_ecdsa(&message_result, &signature,  &public_key) {
+        Ok(_) => {
+            Ok(true)
+        },
+        Err(e) => {
+            Err(Box::new(e))
+        },
     }
 }
 
 
-
-fn get_signature_and_publickey_from_scriptsig_legacytx(scriptsig: &str) -> Option<(String, String)> {
-    //
-    let scriptsig_bytes = match hex::decode(scriptsig) {
-        Ok(bytes) => bytes,
-        Err(_) => return None,
-    };
+// This function gets the signature and public key from the scriptsig of a legacy transaction
+fn get_signature_and_publickey_from_scriptsig_legacytx(scriptsig: &str) -> Result<(String, String), Box<dyn Error>> {
+    // Convert the scriptsig hex string to bytes
+    let scriptsig_bytes = hex::decode(scriptsig)?;
 
     let mut index = 0;
     let mut sig_and_pubkey_vec = Vec::new();
@@ -489,11 +396,12 @@ fn get_signature_and_publickey_from_scriptsig_legacytx(scriptsig: &str) -> Optio
         sig_and_pubkey_vec.push(hex::encode(data));
     }
     // Checking if the sig_and_pubkey_vec has two elements if not fail
-    if sig_and_pubkey_vec.len() == 2 {
-        Some((sig_and_pubkey_vec[0].clone(), sig_and_pubkey_vec[1].clone()))
-    } else {
-        None
+    if sig_and_pubkey_vec.len() != 2 {
+        return Err("Failed to parse scriptsig".into());
     }
+
+
+    Ok((sig_and_pubkey_vec[0].clone(), sig_and_pubkey_vec[1].clone()))
 }
 
 
@@ -508,7 +416,11 @@ fn get_signature_and_publickey_from_scriptsig_legacytx(scriptsig: &str) -> Optio
 // For example if scriptpubkey_type == p2ms then check if OP_0 is first and OP_CHECKMULTISIG ect.
 // https://learnmeabitcoin.com/technical/transaction/input/scriptsig/
 
-fn verify_script(scriptpubkey_asm: &str, script_type: &str, scriptsig: &str) -> bool {
+fn verify_script(scriptpubkey_asm: &str,
+                 script_type: &str,
+                 scriptsig: &str,
+                 transaction: &Transaction
+                 ,serialized_tx: String) -> Result<bool, Box<dyn Error>> {
     // Verify the script based off grokking bitcoin chapter 5
     // look over OP_CODES or operators
 
@@ -522,33 +434,18 @@ fn verify_script(scriptpubkey_asm: &str, script_type: &str, scriptsig: &str) -> 
     //  P2PK, P2PKH, P2MS, P2SH, OP_RETURN  Are all unlocked via the scriptsig field
     // P2WPKH, P2WSH, P2TR are all unlocked via the witness field
 
-    //A script is valid if the only element left on the stack is a OP_1 or greater.
-    //
-    // A script is invalid if:
-    // The final stack is empty
-    // The only element left on the stack is OP_0
-    // There is more than one element left on the stack at the end of execution.
-    // The script exits prematurely (e.g. OP_RETURN).
 
     // A locking script (ScriptPubKey) is placed on every output you create in a transaction
 
     // An unlocking script (ScriptSig or Witness) is provided for every input you want to spend in a transaction
 
-    //Every node will then combine and run these two scripts for each input in every transaction
-    // they receive to make sure they validate. If the unlocking scripts on inputs do not successfully
-    // unlock the locking scripts on the outputs being spent, then the transaction is considered invalid
-    // and will not be relayed or mined in to a block.
-
-    //Even though the unlocking script is provided after the initial locking script (in terms of raw
-    // transactions), we actually put the unlocking script first when we execute the full script
     match script_type {
         "p2pkh" => {
             let (signature, pubkey) = match get_signature_and_publickey_from_scriptsig_legacytx(scriptsig) {
-                Some((sig, pk)) => (sig, pk),
-                None => {
-                    eprintln!("Failed to parse scriptsig");
-                    return false
-                },
+                Ok((sig, pk)) => (sig, pk),
+                Err(e) => {
+                    return Err(e);
+                }
             };
 
             // First push the scriptsig to the stack (sig and pubkey)
@@ -563,7 +460,7 @@ fn verify_script(scriptpubkey_asm: &str, script_type: &str, scriptsig: &str) -> 
                         if let Some(data) = stack.last() {
                             stack.push(data.clone())
                         } else {
-                            return false
+                            return Err("Stack underflow in OP_DUP".into())
                         }
                     }
                     "OP_HASH160"  => {
@@ -574,26 +471,26 @@ fn verify_script(scriptpubkey_asm: &str, script_type: &str, scriptsig: &str) -> 
                             let hash = ripemd160(sha256(pubkey.clone()));
                             stack.push(hash);
                         } else {
-                            return false
+                            return Err("Stack underflow in OP_HASH160".into())
                         }
                     }
                     "OP_EQUALVERIFY" => {
                         // if stack is less than 2 return false
                         if stack.len() < 2 {
-                            return false;
+                            return Err("Stack underflow in OP_EQUALVERIFY".into())
                         }
                         // Otherwise pop the last two items from the stack and compare them
                         // if they are not equal return false, if they are just continue
                         let stack_item1 = stack.pop().unwrap();
                         let stack_item2 = stack.pop().unwrap();
                         if stack_item1 != stack_item2 {
-                            return false;
+                            return Ok(false);
                         }
                     }
                     "OP_CHECKSIG" => {
                         // If the stack has less than two items return false
                         if stack.len() < 2 {
-                            return false;
+                            return Err("Stack underflow in OP_CHECKSIG".into());
                         }
                         // otherwise pop the last two items from the stack (pubkey and signature)
                         // and validate the signature
@@ -601,11 +498,17 @@ fn verify_script(scriptpubkey_asm: &str, script_type: &str, scriptsig: &str) -> 
                         let signature = stack.pop().unwrap();
 
                         // using a place-holder for transaction data for now
-                        let is_valid_signature = verify_signature(signature, pubkey, Vec::new());
+                        let serialized_tx = serialize_tx(transaction).unwrap();
+                        let is_valid_signature = verify_signature(signature, pubkey, serialized_tx);
 
                         // verify_signature will return true if the signature is valid
                         // otherwise false
-                        return is_valid_signature;
+                        if is_valid_signature.is_err() {
+                            return Ok(false);
+                        }  else {
+                            continue
+                        }
+                        //return is_valid_signature;
                     }
                     _ => {
                         // If it's not an operator,it'a ordinary data (like sig or pubkey) and push it onto the stack
@@ -619,7 +522,7 @@ fn verify_script(scriptpubkey_asm: &str, script_type: &str, scriptsig: &str) -> 
             // Check final result
             // If the stack has only one element and it's not empty, transaction is valid
              if stack.len() == 1 && !stack.is_empty() {
-                 return true
+                 return Ok(true)
              }
         }
         "p2sh" => {
@@ -636,80 +539,11 @@ fn verify_script(scriptpubkey_asm: &str, script_type: &str, scriptsig: &str) -> 
         }
         _ => {
             // If the script type is not recognized return false
-            return false;
+            return Ok(false);
         }
     }
 
-    // Loop through the script and match the OP_CODEs
-    // Need to add a few like OP_CHECKSIG and OP_CHECKMULTISIG
-    // for op in scriptpubkey_asm.split_whitespace() {
-    //     match op {
-    //         "OP_DUP" => {
-    //             // If the stack is empty return false
-    //             // Otherwise clone the last item on the stack and push it to the stack
-    //             if let Some(data) = stack.last() {
-    //                 stack.push(data.clone())
-    //             } else {
-    //                 return false
-    //             }
-    //         }
-    //         "OP_HASH160"  => {
-    //             // If the stack is empty return false
-    //             // Otherwise take the last item from the stack, hash it with sha256 then ripemd160
-    //             // and push it to the stack
-    //             if let Some(pubkey) = stack.pop() {
-    //                 let hash = ripemd160(sha256(pubkey.clone()));
-    //                 stack.push(hash);
-    //             } else {
-    //                 return false
-    //             }
-    //         }
-    //         "OP_EQUALVERIFY" => {
-    //             // if stack is less than 2 return false
-    //             if stack.len() < 2 {
-    //                 return false;
-    //             }
-    //             // Otherwise pop the last two items from the stack and compare them
-    //             // if they are not equal return false, if they are just continue
-    //             let stack_item1 = stack.pop().unwrap();
-    //             let stack_item2 = stack.pop().unwrap();
-    //             if stack_item1 != stack_item2 {
-    //                 return false;
-    //             }
-    //         }
-    //         "OP_CHECKSIG" => {
-    //             // If the stack has less than two items return false
-    //             if stack.len() < 2 {
-    //                 return false;
-    //             }
-    //             // otherwise pop the last two items from the stack (pubkey and signature)
-    //             // and validate the signature
-    //             let pubkey = stack.pop().unwrap();
-    //             let signature = stack.pop().unwrap();
-    //
-    //             // using a place-holder for transaction data for now
-    //             let is_valid_signature = validate_signature(signature, pubkey, Vec::new());
-    //
-    //             // verify_signature will return true if the signature is valid
-    //             // otherwise false
-    //             return is_valid_signature;
-    //
-    //         }
-    //         "OP_CHECKMULTISIG" => {
-    //             // TODO
-    //         }
-    //
-    //         _ => {
-    //             // If it's not an operator,it'a ordinary data (like sig or pubkey) and push it onto the stack
-    //             // Verify !!!
-    //             let data = hex::decode(op).unwrap_or_default(); // Convert hex string to bytes
-    //             stack.push(data);
-    //         }
-    //     }
-    // }
-    // Check final result
-    // If the stack has only one element and it's not empty, transaction is valid
-    stack.len() == 1 && !stack.is_empty()
+    Ok(stack.len() == 1 && !stack.is_empty())
 }
 
 // TODO
@@ -840,32 +674,72 @@ fn generate_output_file(block_header: &str, coinbase_tx: String, txids_vec: &Vec
 
 
 
-
-
-
-
 fn main() {
     // Path to one transaction
-    let path = "../mempool/0a3fd98f8b3d89d2080489d75029ebaed0c8c631d061c2e9e90957a40e99eb4c.json";
-    let path = "../mempool/0df43b0d8cdd2046a44c47712f8694b143d49e363fcd17651b1fb48ded94d46c.json";
-    // Test for a p2pkh transaction
-    let path = "../mempool/0ce9f0e0ae9bdc21855b1d550d51449427ae478601a040ba3ea0488fcf75c5d0.json";
-    // Test for a v0_p2wpkh transaction
-    //let path = "../mempool/0a3fd98f8b3d89d2080489d75029ebaed0c8c631d061c2e9e90957a40e99eb4c.json";
+    //let path = "../mempool/0a70cacb1ac276056e57ebfb0587d2091563e098c618eebf4ed205d123a3e8c4.json";
+    let path= "../mempool/5e26eb673e26370b7bfb149f07cd03cba741e7ddc44748ec42c5b89b0d6a650e.json";
 
-    // match deserialize_tx(path) {
-    //     Ok(tx) => println!("Deserialized Transaction is \n {:#?}", tx),
-    //     Err(e) => eprintln!("Error!!! {}", e),
-    // }
-    let tx = deserialize_tx(path).unwrap();
+    // Deserialize the transaction
+    let tx = match deserialize_tx(path) {
+        Ok(tx) => tx,
+        Err(e) => {
+            eprintln!("Error!!! {}", e);
+            return;
+        },
+    };
 
-    // Test for serialized legacy tx
-    let serialized_tx = serialize_tx(&tx).unwrap();
-    //let serialized_segwit_tx = serialized_segwit_tx(&tx).unwrap();
+    // Serialize the transaction
+    let serialized_tx = match serialize_tx(&tx) {
+        Ok(stx) => stx,
+        Err(e) => {
+            eprintln!("Error!!! {}", e);
+            return;
+        },
+    };
 
-    //eprintln!("Serialized Transaction is \n {:#?}", serialized_segwit_tx);
-    eprintln!("Serialized Transaction is \n {:#?}", serialized_tx);
+    // Verify the script for each input in the transaction
+    for vin in &tx.vin {
+        let scriptpubkey_asm = &vin.prevout.scriptpubkey_asm;
+        let script_type = &vin.prevout.scriptpubkey_type;
+        let scriptsig = &vin.scriptsig;
+
+        let is_valid_script = match verify_script(scriptpubkey_asm, script_type, scriptsig, &tx, serialized_tx.clone()) {
+            Ok(is_valid) => is_valid,
+            Err(e) => {
+                eprintln!("Error!!! {}", e);
+                return;
+            },
+        };
+
+        println!("Is valid script: {}", is_valid_script);
+    }
 }
+
+
+
+// fn main() {
+//     // Path to one transaction
+//     // Test for a p2pkh transaction
+//     let path = "../mempool/0a70cacb1ac276056e57ebfb0587d2091563e098c618eebf4ed205d123a3e8c4.json";
+//
+//     // Test for a v0_p2wpkh transaction
+//     //let path = "../mempool/0aac03973f3d348fffb25fd7b802b22b120b0d276d655e557aee0a993ed4c0b7.json";
+//
+//     // match deserialize_tx(path) {
+//     //     Ok(tx) => println!("Deserialized Transaction is \n {:#?}", tx),
+//     //     Err(e) => eprintln!("Error!!! {}", e),
+//     // }
+//     let tx = deserialize_tx(path).unwrap();
+//
+//     // Test for serialized legacy tx
+//     let serialized_tx = serialize_tx(&tx).unwrap();
+//     //let serialized_segwit_tx = serialized_segwit_tx(&tx).unwrap();
+//
+//     eprintln!("Serialized Transaction is \n {:#?}", serialized_tx);
+//     //eprintln!("Serialized Transaction is \n {:#?}", serialized_tx);
+//
+//
+// }
 // fn main() -> io::Result<()> {
 //
 //
