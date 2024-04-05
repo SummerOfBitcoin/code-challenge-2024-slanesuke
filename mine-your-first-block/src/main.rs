@@ -36,7 +36,7 @@ struct Vin {
     prevout: Prevout,
     scriptsig: String,
     scriptsig_asm: String,
-    witness: Vec<String>,
+    witness: Option<Vec<String>>,
     is_coinbase: bool,
     sequence: u32,
 }
@@ -101,8 +101,9 @@ fn validate_tx(transaction: &Transaction) -> Result<bool, Box<dyn Error>> {
     // The for loop may need changing.
     // I need to send in the script sig to verify that is why there is an  error because scriptsig
     // is in vin
+    // Right now there is a placeholder
     for vout in &transaction.vout {
-        if !verify_script(&vout.scriptpubkey_asm, &vout.scriptpubkey_type, ) {
+        if !verify_script(&vout.scriptpubkey_asm, &vout.scriptpubkey_type, "") {
             return Ok(false);
         }
     }
@@ -114,13 +115,13 @@ fn validate_tx(transaction: &Transaction) -> Result<bool, Box<dyn Error>> {
 
         // let signed_data = create_sighash(transaction, vin.vout as usize);
         let (signature, public_key, sighash_type) = get_signature_and_pubkey_and_sighash_type(&vin.scriptsig_asm)?;
-        let signed_data = create_sighash(transaction, vin.vout as usize, sighash_type as u32)?;
+        // let signed_data = create_sighash(transaction, vin.vout as usize, sighash_type as u32)?;
 
 
-
-        if !verify_signature(signature, public_key, signed_data) {
-            return Err("Signature verification failed".into())
-        }
+        //
+        // if !verify_signature(signature, public_key, signed_data) {
+        //     return Err("Signature verification failed".into())
+        // }
     }
 
     // if all verifications pass the transaction is validated and returns true or OK
@@ -153,62 +154,134 @@ fn get_signature_and_pubkey_and_sighash_type(scriptsig_asm: &str) -> Result<(Vec
 
 
 
-fn create_sighash(transaction: &Transaction, input_index: usize, sighash_type: u32) -> Result<Vec<u8>, Box<dyn Error>> {
-    // This function needs to create a sighash for a transaction
+// fn create_sighash(transaction: &Transaction, input_index: usize, sighash_type: u32) -> Result<Vec<u8>, Box<dyn Error>> {
+//     // This function needs to create a sighash for a transaction
+//
+//
+//     //STILL NEED TO VERIFY THIS AND WORK ON SERIALIZATION
+//
+//     let serialized_tx = serialize_tx(transaction).unwrap();
+//
+//     let modified_tx = modify_tx_for_sighash(serialized_tx, input_index,  sighash_type).unwrap();
+//
+//     let sighash = sha256(sha256(modified_tx));
+//
+//     Ok(sighash)
+// }
 
-
-    //STILL NEED TO VERIFY THIS AND WORK ON SERIALIZATION
-
-    let serialized_tx = serialize_tx(transaction).unwrap();
-
-    let modified_tx = modify_tx_for_sighash(serialized_tx, input_index,  sighash_type).unwrap();
-
-    let sighash = sha256(sha256(modified_tx));
-
-    Ok(sighash)
-}
-
-fn serialize_tx(transaction: &Transaction) -> Result<Vec<u8>, Box<dyn Error>> {
+/// This serialize_tx function only works for legacy transactions I THINK
+fn serialize_tx(transaction: &Transaction) -> Result<String, Box<dyn Error>> {
     // This function needs to serialize the transaction into bytes
 
-    let mut serialized_tx = Vec::new();
+    // THis is what a raw tx looks like
+    // 0100000001400b0f8fa472bcbbeea13ed27f8755f7f707c75bca39c58484ceb58e38a690a8000000006a47304402205ace3db3f8de8ec4fedc4f9b0cc7c1cd6e11e889dc4ddfa44c72ba988736e27e02203cd5762ed6f5456db71c20977061c145038ddacb9880e4fab283279ef9a14abe012102f20b1c1044b2479019238308f97751fb9202faf4524c6f186dda04edfc983bd6feffffff02955cb80b000000001976a9147a10c04d428d562117461fb8eaaa5ff08a96a7c288aca16079a1090000001976a914da6231bd6faced261f75b281bb794b6e1de3f6aa88acc7020700
+
+    let mut serialized_tx = String::new();
 
     // Serialize version field, little endian
-    serialized_tx.write_all(&transaction.version.to_le_bytes())?;
+    let version = transaction.version.to_le_bytes();
+    serialized_tx.push_str(&hex::encode(version));
 
     // Serialize vin count
-    write_varint(transaction.vin.len() as u64, &mut serialized_tx)?;
+    let vin_count = transaction.vin.len() as u64;
+    serialized_tx.push_str(&format!("{:02x}", vin_count));
 
-    // Serialize each vin {
+    // Sereialize txid
     for vin in &transaction.vin {
-        // convert txid from hex to bytes
-        let txid_bytes = hex::decode(&vin.txid)?;
-        serialized_tx.write_all(&txid_bytes)?;
+        serialized_tx.push_str(&vin.txid);
 
-        // Serialize vout, little endian
-        serialized_tx.write_all(&vin.vout.to_le_bytes())?;
+        let vout = &vin.vout.to_le_bytes();
+        serialized_tx.push_str(&hex::encode(vout));
 
-        // Serialize scriptSig
-        let scriptsig_bytes = hex::decode(&vin.scriptsig)?;
-        serialized_tx.write_all(&scriptsig_bytes)?;
+        // Serialize scriptSig size I kept getting trailing zeros after my compactsize hex
+        let scriptsig_size = vin.scriptsig.len() / 2;
+        // let scriptsig_size_bytes = (scriptsig_size as u64).to_le_bytes();
+        // let scriptsig_size_hex = hex::encode(scriptsig_size_bytes);
+        // serialized_tx.push_str(&scriptsig_size_hex);
 
-        serialized_tx.write_all(&vin.sequence.to_le_bytes())?;
+        // So I had to do this to remove the trailing zeros
+        // It basically converts the u64 to bytes then to a vec then removes the trailing zeros
+        let mut scriptsig_size_bytes = (scriptsig_size as u64).to_le_bytes().to_vec();
+
+        if let Some(last_non_zero_position) = scriptsig_size_bytes.iter().rposition(|&x| x != 0) {
+            scriptsig_size_bytes.truncate(last_non_zero_position + 1);
+        }
+
+        let scriptsig_size_hex = hex::encode(&scriptsig_size_bytes);
+        serialized_tx.push_str(&scriptsig_size_hex);
+
+        // Now push scriptsig itself
+        serialized_tx.push_str(&vin.scriptsig);
+
+        // push sequence
+        let sequence = &vin.sequence.to_le_bytes();
+        let sequence_hex = hex::encode(sequence);
+        serialized_tx.push_str(&sequence_hex);
     }
 
-
-    // Serialize  vout count
-    write_varint(transaction.vout.len() as u64, &mut serialized_tx)?;
-
+    // Now serialize vout count
     for vout in &transaction.vout {
-        let scriptpubkey_bytes = hex::decode(&vout.scriptpubkey)?;
-        serialized_tx.write_all(&scriptpubkey_bytes)?;
+        let vout_count = transaction.vout.len() as u64;
+        serialized_tx.push_str(&format!("{:02x}", vout_count));
 
-        // Write value to serialized_tx
-        serialized_tx.write_all(&vout.value.to_le_bytes())?;
+        // Next push the amount of satoshis
+        let value = &vout.value.to_le_bytes();
+        serialized_tx.push_str(&hex::encode(value));
+
+        // Now push the scriptpubkey cpmpact size
+        let scriptpubkey_size = vout.scriptpubkey.len() / 2;
+        let mut scriptpubkey_size_bytes = (scriptpubkey_size as u64).to_le_bytes().to_vec();
+        if let Some(last_non_zero_position) = scriptpubkey_size_bytes.iter().rposition(|&x| x != 0) {
+            scriptpubkey_size_bytes.truncate(last_non_zero_position + 1);
+        }
+        let scriptpubkey_size_hex = hex::encode(&scriptpubkey_size_bytes);
+        serialized_tx.push_str(&scriptpubkey_size_hex);
+        serialized_tx.push_str(&vout.scriptpubkey);
     }
 
-    // Serialize locktime
-    serialized_tx.write_all(&transaction.locktime.to_le_bytes())?;
+    // let txid = hex::decode(&transaction.vin[0].txid)?;
+    // serialized_tx.push_str(&hex::encode(txid));
+
+
+
+
+    /// This is the old serialize tx fn but it sucks
+    // // Serialize version field, little endian
+    // serialized_tx.write_all(&transaction.version.to_le_bytes())?;
+    //
+    // // Serialize vin count
+    // write_varint(transaction.vin.len() as u64, &mut serialized_tx)?;
+    //
+    // // Serialize each vin {
+    // for vin in &transaction.vin {
+    //     // convert txid from hex to bytes
+    //     let txid_bytes = hex::decode(&vin.txid)?;
+    //     serialized_tx.write_all(&txid_bytes)?;
+    //
+    //     // Serialize vout, little endian
+    //     serialized_tx.write_all(&vin.vout.to_le_bytes())?;
+    //
+    //     // Serialize scriptSig
+    //     let scriptsig_bytes = hex::decode(&vin.scriptsig)?;
+    //     serialized_tx.write_all(&scriptsig_bytes)?;
+    //
+    //     serialized_tx.write_all(&vin.sequence.to_le_bytes())?;
+    // }
+    //
+    //
+    // // Serialize  vout count
+    // write_varint(transaction.vout.len() as u64, &mut serialized_tx)?;
+    //
+    // for vout in &transaction.vout {
+    //     let scriptpubkey_bytes = hex::decode(&vout.scriptpubkey)?;
+    //     serialized_tx.write_all(&scriptpubkey_bytes)?;
+    //
+    //     // Write value to serialized_tx
+    //     serialized_tx.write_all(&vout.value.to_le_bytes())?;
+    // }
+    //
+    // // Serialize locktime
+    // serialized_tx.write_all(&transaction.locktime.to_le_bytes())?;
 
 
     Ok(serialized_tx)
@@ -235,33 +308,33 @@ fn write_varint(value: u64, buf: &mut Vec<u8>) -> Result<(), Box<dyn Error>> {
 
 // Helper function to modify the transaction for the sighash
 // This function will be used in the create_sighash function AHHH
-
-fn modify_tx_for_sighash(serialized_tx: Vec<u8>, input_index: usize, sighash_type: u32) -> Result<Vec<u8>, Box<dyn Error>> {
-    let mut modified_tx = serialized_tx.clone();
-
-    // match sighash_type {
-    //     SIGHASH_ALL => {
-    //         // For SIGHASH_ALL, all inputs and outputs are signed, so no modification is needed
-    //     }
-    //     SIGHASH_NONE => {
-    //         // For SIGHASH_NONE, none of the outputs are signed
-    //         // You need to remove the outputs from the serialized transaction
-    //     }
-    //     SIGHASH_SINGLE => {
-    //         // For SIGHASH_SINGLE, only the output with the same index as the input is signed
-    //         // You need to remove all other outputs from the serialized transaction
-    //     }
-    //     SIGHASH_ALL | SIGHASH_ANYONECANPAY => {
-    //         // For SIGHASH_ALL | SIGHASH_ANYONECANPAY, all outputs and only one input is signed
-    //         // You need to remove all other inputs from the serialized transaction
-    //     }
-    //     _ => {
-    //         // For other sighash types, you need to implement the appropriate modifications
-    //     }
-    // }
-
-    Ok(modified_tx)
-}
+//
+// fn modify_tx_for_sighash(serialized_tx: String, input_index: usize, sighash_type: u32) -> Result<Vec<u8>, Box<dyn Error>> {
+//     let mut modified_tx = serialized_tx.clone();
+//
+//     // match sighash_type {
+//     //     SIGHASH_ALL => {
+//     //         // For SIGHASH_ALL, all inputs and outputs are signed, so no modification is needed
+//     //     }
+//     //     SIGHASH_NONE => {
+//     //         // For SIGHASH_NONE, none of the outputs are signed
+//     //         // You need to remove the outputs from the serialized transaction
+//     //     }
+//     //     SIGHASH_SINGLE => {
+//     //         // For SIGHASH_SINGLE, only the output with the same index as the input is signed
+//     //         // You need to remove all other outputs from the serialized transaction
+//     //     }
+//     //     SIGHASH_ALL | SIGHASH_ANYONECANPAY => {
+//     //         // For SIGHASH_ALL | SIGHASH_ANYONECANPAY, all outputs and only one input is signed
+//     //         // You need to remove all other inputs from the serialized transaction
+//     //     }
+//     //     _ => {
+//     //         // For other sighash types, you need to implement the appropriate modifications
+//     //     }
+//     // }
+//
+//     Ok(modified_tx)
+//}
 
 
 
@@ -473,7 +546,9 @@ fn verify_script(scriptpubkey_asm: &str, script_type: &str, scriptsig: &str) -> 
             }
             // Check final result
             // If the stack has only one element and it's not empty, transaction is valid
-            stack.len() == 1 && !stack.is_empty()
+             if stack.len() == 1 && !stack.is_empty() {
+                 return true
+             }
         }
         "p2sh" => {
             todo!()
@@ -697,32 +772,39 @@ fn generate_output_file(block_header: &str, coinbase_tx: String, txids_vec: &Vec
 
 
 
-// fn main() {
-//     // Path to one transaction
-//     let path = "../mempool/0a3fd98f8b3d89d2080489d75029ebaed0c8c631d061c2e9e90957a40e99eb4c.json";
-//
-//     match deserialize_tx(path) {
-//         Ok(tx) => println!("Deserialized Transaction is \n {:#?}", tx),
-//         Err(e) => eprintln!("Error!!! {}", e),
-//     }
-// }
-fn main() -> io::Result<()> {
+fn main() {
+    // Path to one transaction
+    let path = "../mempool/0a3fd98f8b3d89d2080489d75029ebaed0c8c631d061c2e9e90957a40e99eb4c.json";
+    let path = "../mempool/0df43b0d8cdd2046a44c47712f8694b143d49e363fcd17651b1fb48ded94d46c.json";
+    let path = "../mempool/0ce9f0e0ae9bdc21855b1d550d51449427ae478601a040ba3ea0488fcf75c5d0.json";
+
+    // match deserialize_tx(path) {
+    //     Ok(tx) => println!("Deserialized Transaction is \n {:#?}", tx),
+    //     Err(e) => eprintln!("Error!!! {}", e),
+    // }
+    let tx = deserialize_tx(path).unwrap();
+    let serialized_tx = serialize_tx(&tx).unwrap();
 
 
-
-    let serialized_block_header = "Block header place holder for now";
-
-    let total_tx_fee = 0; // Place-holder for now because I need to somehow calculate the tx fee
-    let coinbase_tx: String = create_coinbase_tx(total_tx_fee);
-
-
-
-    let txid_list = vec!["txid1 test ", "txid2 test ", "txid3 testtttt"];
-
-    // generate_output_file(serialized_block_header, serialized_coinbase_tx, &txid_list)?;
-    generate_output_file(serialized_block_header, coinbase_tx, &txid_list)?;
-
-    Ok(())
+    eprintln!("Serialized Transaction is \n {:#?}", serialized_tx);
 }
+// fn main() -> io::Result<()> {
+//
+//
+//
+//     let serialized_block_header = "Block header place holder for now";
+//
+//     let total_tx_fee = 0; // Place-holder for now because I need to somehow calculate the tx fee
+//     let coinbase_tx: String = create_coinbase_tx(total_tx_fee);
+//
+//
+//
+//     let txid_list = vec!["txid1 test ", "txid2 test ", "txid3 testtttt"];
+//
+//     // generate_output_file(serialized_block_header, serialized_coinbase_tx, &txid_list)?;
+//     generate_output_file(serialized_block_header, coinbase_tx, &txid_list)?;
+//
+//     Ok(())
+// }
 
 
