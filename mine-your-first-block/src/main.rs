@@ -2,7 +2,7 @@
 /// FIGURE OUT HOW TO VERIFY THE SIGNATURE OF A TRANSACTION UGHH
 
 
-use std::fmt::Debug;
+use std::fmt::{Debug, format};
 use serde::Deserialize;
 use serde_json;
 use sha2::{Digest as ShaDigest, Sha256};
@@ -474,9 +474,12 @@ fn p2pkh_tx_validation(transaction: &mut Transaction) -> Result<bool, Box<dyn Er
         let message_in_bytes = hex::decode(serialized_tx_for_message)
             .map_err(|e| format!("Failed to decode the hex string for input: {}", i))?;
 
-        stack.push(hex::decode(signature).unwrap());
-        stack.push(hex::decode(pubkey).unwrap());
+        let decoded_signature = hex::decode(signature).map_err(|e| format!("Failed to decode signature: {}", e))?;
+        let decoded_pubkey = hex::decode(pubkey).map_err(|e| format!("Failed to decode pubkey: {}", e))?;
+        stack.push(decoded_signature);
+        stack.push(decoded_pubkey);
 
+        let mut hash_result: String = "".to_string();
         for op in scriptPubKey.split_whitespace() {
             match op {
                 "OP_DUP" => {
@@ -487,13 +490,15 @@ fn p2pkh_tx_validation(transaction: &mut Transaction) -> Result<bool, Box<dyn Er
                     }
                     stack.push(stack.last().unwrap().clone());
                 }
-                "OP_HASH160"  => {
+                "OP_HASH160" => {
                     // If the stack is empty return false
                     // Otherwise take the last item from the stack, hash it with sha256 then ripemd160
                     // and push it to the stack
                     if let Some(pubkey) = stack.pop() {
-                        let hash = ripemd160(sha256(pubkey.clone()));
-                        stack.push(hash);
+                        let sha256_hash = sha256(pubkey);
+                        let ripemd160_hash = ripemd160(sha256_hash);
+                        stack.push(ripemd160_hash.clone());
+                        hash_result = format!("{}",hex::encode(&ripemd160_hash));
                     } else {
                         return Err(format!("Stack underflow in OP_HASH160 for input {}", i).into());
                     }
@@ -506,9 +511,10 @@ fn p2pkh_tx_validation(transaction: &mut Transaction) -> Result<bool, Box<dyn Er
                     // Otherwise pop the last two items from the stack and compare them
                     // if they are not equal return false, if they are just continue
                     let stack_item1 = stack.pop().unwrap();
+                    let stack_temp = stack.pop().unwrap();
                     let stack_item2 = stack.pop().unwrap();
                     if stack_item1 != stack_item2 {
-                        return Err(format!("OP_EQUALVERIFY failed for input {}", i).into());
+                        return Err(format!("Stackitem1: {} aND Stackitem 2: {} and Hash: {} .OP_EQUALVERIFY failed for input {}",hex::encode(stack_item1), hex::encode(stack_item2),hash_result, i).into());
                     }
                 }
                 "OP_CHECKSIG" => {
