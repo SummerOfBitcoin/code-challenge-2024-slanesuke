@@ -21,15 +21,16 @@ use secp256k1::ecdsa::Signature;
 
 
 // Transaction struct that may be overcomplicated right now. We will see
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 struct Transaction {
     version: u32,
     locktime: u32,
     vin: Vec<Vin>,
     vout: Vec<Vout>,
+    sighash: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 struct Vin {
     txid: String,
     vout: u32,
@@ -41,7 +42,7 @@ struct Vin {
     sequence: u32,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 struct Prevout {
     scriptpubkey: String,
     scriptpubkey_asm: String,
@@ -50,60 +51,100 @@ struct Prevout {
     value: u64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 struct Vout {
     scriptpubkey: String,
     scriptpubkey_asm: String,
     scriptpubkey_type: String,
-    scriptpubkey_address: String,
+    scriptpubkey_address: Option<String>,
     value: u64,
 }
+
+// TODO Before I turn it in
+// Implement the CoinbaseTx function! Need to add the serialized coinbase tx to output.txt
+// If the coinbase tx has a segwit tx according to BIP 141: all coinbase transactions since the segwit
+// upgrade need to include a witness reserved value in
+// the witness field for the input, and then use that along with a witness root hash to put a wTXID
+// commitment in the ScriptPubKey of one of the outputs in the transaction.
+
+// This function will create a coinbase transaction
+fn create_coinbase_tx (total_tx_fee: u64) -> String {
+    // Hard coding the current block height I see on mempool.space and current block reward
+    let block_height: u32 = 837122;
+    let block_height_bytes = block_height.to_le_bytes();
+    let block_height_hex = hex::encode(block_height_bytes);
+
+
+    let block_sub_plus_fees: u64 = 625000000 + total_tx_fee; // Block reward in satoshis
+    let block_reward_bytes = block_sub_plus_fees.to_le_bytes();
+    let block_reward_hex = hex::encode(block_reward_bytes);
+
+    // adding an address to pay the block reward to
+    let address = String::from("36tvL5nHzSffbx4v9UhBfyGLWAkBUKyoxn");
+    // Same address converted to hex for serialization
+    let address = "053918f36132b92f65c11de2deeccf2f0b35177df3297ed5db".to_string();
+
+
+    let extra_nonce = String::from("SlanesukeSOBIntern2024");
+    let extra_nonce_hex = hex::encode(extra_nonce.as_bytes());
+
+    // Adding the block height and extra nonce to the coinbase input scriptSig
+    // the block height is in little endian byte order then encoding in hex
+    let block_scriptsig = format!("{}{}", block_height_hex, extra_nonce_hex);
+
+
+
+    // Finish manually serializing the coinbase tx.
+    // Left off concantingating the scriptPubKey SIze
+    // The address might need to be in hex
+    let version = "01000000".to_string();
+    let input_count = "01".to_string();
+    let txid = "0000000000000000000000000000000000000000000000000000000000000000";
+    let vout = "ffffffff";
+    let scriptsig_size = format!("{:02x}", block_scriptsig.len()/2);
+    let sequence = "ffffffff";
+    let output_count = "01".to_string();
+    let scriptpubkey_size = format!("{:02x}", address.len()/2);
+    let locktime = "00000000";
+
+
+    let serialized_coinbase_tx = format!("{}{}{}{}{}{}{}{}{}{}{}{}", version, input_count, txid,
+                                         vout, scriptsig_size, block_scriptsig, sequence, output_count, block_reward_hex, scriptpubkey_size,
+                                         address, locktime);
+
+    serialized_coinbase_tx
+}
+
+// TODO
+// Need to get my head together and figure out how to simplify and verify the .json transactions. After
+// that i need to write a mining algo to efficiently fit the transactions with the highest fees into a block
+// and pass the block fees to coinbase tx so I can add it to the block reward.
+// Need to then just get there txid's and put them in a vec to add to output.txt
+
+// TODO
+// Implement the BlockHeader function! Need to add the serialized block header to output.txt
+
 
 
 
 
 
 // First just  working  with one tx so I can learn
-fn deserialize_tx(filename: &str) -> Result<Transaction, Box<dyn Error>> {
+fn deserialize_tx(filename: &str) -> Transaction {
     //  Open the file of a tx
-    let mut file = File::open(filename)?;
+    let mut file = File::open(filename).unwrap();
 
     let mut json_string = String::new();
-    file.read_to_string(& mut json_string)?;
+    file.read_to_string(& mut json_string).unwrap();
 
-    let tx: Transaction = serde_json::from_str(&json_string)?;
+    let tx: Transaction = serde_json::from_str(&json_string).unwrap();
 
     // return a transaction if the deserialization is successful
-    Ok(tx)
+    tx
 }
 
-
-
-
-
-
-
-
-fn validate_tx(transaction: &Transaction) -> Result<bool, Box<dyn Error>> {
-
-    // If the input value in sats is less than the output value then the transaction is already
-    // invalid. the sum of the input must be greater than the sum of the output the difference is
-    // the transaction fee. need to filter out higher tx fees later to include in block
-    let input_value: u64 = transaction.vin.iter().map(|vin| vin.prevout.value).sum();
-    let output_value: u64 = transaction.vout.iter().map(|vout| vout.value).sum();
-    if input_value < output_value {
-        return Ok(false);
-    }
-
-    // // if all verifications pass the transaction is validated and returns true or OK
-     Ok(true)
-}
-
-
-
-/// This serialize_tx function only works for legacy transactions
-/// I believe i need to add 00 for an empty witness field?
-fn serialize_tx(transaction: &Transaction) -> Result<String, Box<dyn Error>> {
+/// This function will serialize a transaction into a string of hex bytes
+fn serialize_tx(transaction: &Transaction) -> String {
     // This function needs to serialize the transaction into bytes
 
 
@@ -178,12 +219,16 @@ fn serialize_tx(transaction: &Transaction) -> Result<String, Box<dyn Error>> {
     let lock_hex = hex::encode(lock);
     serialized_tx.push_str(&lock_hex);
 
-    Ok(serialized_tx)
+    if transaction.sighash.is_some() {
+        serialized_tx.push_str(&<std::option::Option<std::string::String> as Clone>::clone(&transaction.sighash).unwrap());
+    }
+
+    serialized_tx
 }
 
 
-/// Segwit tx serialization function
-fn serialized_segwit_tx(transaction: &Transaction) -> Result<String, Box<dyn Error>> {
+/// This function will serialize a segwit transaction into a string of hex bytes
+fn serialized_segwit_tx(transaction: &Transaction) -> String {
     let mut serialized_tx = String::new();
 
     let version = transaction.version.to_le_bytes();
@@ -212,7 +257,7 @@ fn serialized_segwit_tx(transaction: &Transaction) -> Result<String, Box<dyn Err
         if vin.scriptsig.is_empty() {
             serialized_tx.push_str("00");
         } else {
-            /// Otherwise it's a tx with both legacy and segwit inputs so I have to add the scriptsig
+            // Otherwise it's a tx with both legacy and segwit inputs so I have to add the scriptsig
             // Coppied from the legacy serialize_tx function
             // Serialize scriptSig size I kept getting trailing zeros after my compactsize hex
             let scriptsig_size = vin.scriptsig.len() / 2;
@@ -286,71 +331,30 @@ fn serialized_segwit_tx(transaction: &Transaction) -> Result<String, Box<dyn Err
     let lock_hex = hex::encode(lock);
     serialized_tx.push_str(&lock_hex);
 
+    // Unsure if segwit tx's need a sighash type so will keep it commented for now
+    // if transaction.sighash.is_some() {
+    //         serialized_tx.push_str(&<std::option::Option<std::string::String> as Clone>::clone(&transaction.sighash).unwrap());
+    //     }
 
 
 
-     Ok(serialized_tx)
+     serialized_tx
 }
 
-
-
-
-
-// TO get The message for verifying the signature
-// serialize the transaction as per the input address type (scriptpubkey_type in the prevout)
-// append the sighash_type (present at the end of the signature you are verifying) at the end of the trimmed tx byte sequence
-// double hash 256(trimmed_tx)
-// parse the signature, publickey, tx_hash into SIGNATURE, PUBLIC KEY and MESSAGE objects using Secp256k1 libraries,
-// then verify the message against the public key and signature  using ecdsa verification functions
-//
-// basic procedure is this, you have do research for the whole thing.
-// TODO Make a function that validates the signature of a transaction
-
-// to get the sighash_type, its the last two bytes;
-// let sighash_type = &signature[signature.len()-2..];
-
-// 0x01 = SIGHASH_ALL
-// 0x02 = SIGHASH_NONE
-// 0x03 = SIGHASH_SINGLE
-// 0x81 = SIGHASH_ANYONECANPAY | SIGHASH_ALL
-// 0x82 = SIGHASH_ANYONECANPAY | SIGHASH_NONE
-// 0x83 = SIGHASH_ANYONECANPAY | SIGHASH_SINGLE
-
-// Left off Needing to serialize the p2pkh transaction to get the message and verify the sig
-
-/// Working on p2pkh first
+/// This function will verify the signature of a transaction when passed into OP_CHECKSIG
 fn verify_signature(
     signature: Vec<u8>,
     pubkey: Vec<u8>,
-    mut serialized_tx: String) -> Result<bool, Box<dyn Error>> {
-    // Need to append the sighash_type to the serialized_tx
-    // let sighash_type = &signature[signature.len() - 2..];
-    // serialized_tx.push_str(&hex::encode(sighash_type));
+    mut serialized_tx: Vec<u8>) -> Result<bool, Box<dyn Error>> {
 
-    // I think i'm only appending 2 bytes but it may be 4 bytes i need, 01000000 instead of 01
-    // This is a roundabout way  of doing it and i should fix it or send it the correct value in the first place
-    // let sighash_type = &signature[signature.len() - 2..signature.len()];
-    // let sighash_type_str = std::str::from_utf8(&sighash_type).unwrap();
-    // let sighash_type = u8::from_str_radix(sighash_type_str, 16).unwrap();
-    // let sighash_type_bytes = sighash_type.to_le_bytes();
-    // serialized_tx.push_str(&hex::encode(sighash_type_bytes));
+    // Removing the sighash type from the signature
+    let signature = &signature[..signature.len()-1];
+    let secp = Secp256k1::new();
 
-    // I think i'm only appending 2 bytes but it may be 4 bytes i need, 01000000 instead of 01
 
-    // Hashing the serialized tx or message in a Hash256
-    // But first I need to convert the serialized_tx to bytes
-    let hashed_message_bytes = hex::decode(serialized_tx).expect("Decoding failed");
-    let hashed_message = sha256(sha256(hashed_message_bytes));
-    //let hash = hex::encode(hashed_message);
-
-    //  Creating a new secp256k1 object
-    let secp = Secp256k1::verification_only();
-
-    // Creating a message, public key and signature
-
-    let message_result = Message::from_digest_slice(&hashed_message).unwrap();
-    // let message_result = Message::from_digest_slice(&Sha256::digest(&serialized_tx.as_bytes()));
-    let public_key =  PublicKey::from_slice(&pubkey).unwrap();
+    let hash_array: [u8; 32] = double_sha256(serialized_tx);
+    let message_result = Message::from_digest_slice(&hash_array).unwrap();
+    let public_key =  PublicKey::from_slice(&pubkey).expect("Failed to create public key");
     let signature = Signature::from_der(&signature).unwrap();
 
 
@@ -361,14 +365,14 @@ fn verify_signature(
             Ok(true)
         },
         Err(e) => {
-            Err(Box::new(e))
+            Ok(false)
         },
     }
 }
 
-
-// This function gets the signature and public key from the scriptsig of a legacy transaction
-fn get_signature_and_publickey_from_scriptsig_legacytx(scriptsig: &str) -> Result<(String, String), Box<dyn Error>> {
+/// This function gets the signature and public key from the scriptsig of a legacy transaction
+// Would it be easier to get the signature and pubkey from the scriptsig_asm field?
+fn get_signature_and_publickey_from_scriptsig(scriptsig: &str) -> Result<(String, String), Box<dyn Error>> {
     // Convert the scriptsig hex string to bytes
     let scriptsig_bytes = hex::decode(scriptsig)?;
 
@@ -378,7 +382,7 @@ fn get_signature_and_publickey_from_scriptsig_legacytx(scriptsig: &str) -> Resul
     // Loop through the scriptsig bytes to parse
     while index < scriptsig_bytes.len() {
         if index+1 >= scriptsig_bytes.len() {
-            break;
+            return Err("Unexpected end of scriptSig".into());
         }
 
         let length = scriptsig_bytes[index] as usize; // This byte is the length of data to push (sig or pub)
@@ -386,7 +390,7 @@ fn get_signature_and_publickey_from_scriptsig_legacytx(scriptsig: &str) -> Resul
 
         // Checks if the length is greater than the remaining bytes in the scriptsig
         if index + length > scriptsig_bytes.len() {
-            break;
+            return Err("ScriptSig length byte exceeds remaining data".into());
         }
 
         // Get the data of the opcode length
@@ -397,222 +401,155 @@ fn get_signature_and_publickey_from_scriptsig_legacytx(scriptsig: &str) -> Resul
     }
     // Checking if the sig_and_pubkey_vec has two elements if not fail
     if sig_and_pubkey_vec.len() != 2 {
-        return Err("Failed to parse scriptsig".into());
+        return Err(format!("Expected 2 elements, found {}", sig_and_pubkey_vec.len()).into());
     }
 
 
     Ok((sig_and_pubkey_vec[0].clone(), sig_and_pubkey_vec[1].clone()))
 }
 
+/// This function will get the tx ready for signing by removing the scriptsig and adding the
+/// scriptpubkeyto the scriptsig field and adding the sighash to the transaction
+fn get_tx_readyfor_signing_legacy(transaction : &mut Transaction) -> Transaction {
+
+    let scriptsig = &transaction.vin[0].scriptsig;
+    let (signature, pubkey) = get_signature_and_publickey_from_scriptsig(scriptsig).unwrap();
+
+    let sighash_type = &signature[signature.len()-2..];
+
+    // Hard coding the sighash type for now
+     let sighash = format!("{}000000", sighash_type);
 
 
+    // Adding the sighash to the transaction
+    // It turns a string into a u32
+    transaction.sighash = Some(sighash);
 
 
+    // Emptying the scriptsig fields for each input
+    for vin in transaction.vin.iter_mut() {
+        // Empty
+        vin.scriptsig = String::new();
 
-// TODO make a function that verifies if a script returns OK
-// Need to send in scriptpubkey_asm and verify it, I believe the scriptpubkey_type will
-// tell me witch script to use  and match against. I will need to add a few more operators
-
-// For example if scriptpubkey_type == p2ms then check if OP_0 is first and OP_CHECKMULTISIG ect.
-// https://learnmeabitcoin.com/technical/transaction/input/scriptsig/
-
-fn verify_script(scriptpubkey_asm: &str,
-                 script_type: &str,
-                 scriptsig: &str,
-                 transaction: &Transaction
-                 ,serialized_tx: String) -> Result<bool, Box<dyn Error>> {
-    // Verify the script based off grokking bitcoin chapter 5
-    // look over OP_CODES or operators
-
-    // Making a stack for the op_code opperation
-    let mut stack: Vec<Vec<u8>> = Vec::new();
-
-    // First I want to check the scriptpub_key type so I preform the right script verification.
-    // for each case.
-    // Include v1_p2tr , v0_p2wpkh , p2sh , p2pkh,  and p2wsh
-
-    //  P2PK, P2PKH, P2MS, P2SH, OP_RETURN  Are all unlocked via the scriptsig field
-    // P2WPKH, P2WSH, P2TR are all unlocked via the witness field
-
-
-    // A locking script (ScriptPubKey) is placed on every output you create in a transaction
-
-    // An unlocking script (ScriptSig or Witness) is provided for every input you want to spend in a transaction
-
-    match script_type {
-        "p2pkh" => {
-            let (signature, pubkey) = match get_signature_and_publickey_from_scriptsig_legacytx(scriptsig) {
-                Ok((sig, pk)) => (sig, pk),
-                Err(e) => {
-                    return Err(e);
-                }
-            };
-
-            // First push the scriptsig to the stack (sig and pubkey)
-            stack.push(hex::decode(signature).unwrap());
-            stack.push(hex::decode(pubkey).unwrap());
-
-            for op in scriptpubkey_asm.split_whitespace() {
-                match op {
-                    "OP_DUP" => {
-                        // If the stack is empty return false
-                        // Otherwise clone the last item on the stack and push it to the stack
-                        if let Some(data) = stack.last() {
-                            stack.push(data.clone())
-                        } else {
-                            return Err("Stack underflow in OP_DUP".into())
-                        }
-                    }
-                    "OP_HASH160"  => {
-                        // If the stack is empty return false
-                        // Otherwise take the last item from the stack, hash it with sha256 then ripemd160
-                        // and push it to the stack
-                        if let Some(pubkey) = stack.pop() {
-                            let hash = ripemd160(sha256(pubkey.clone()));
-                            stack.push(hash);
-                        } else {
-                            return Err("Stack underflow in OP_HASH160".into())
-                        }
-                    }
-                    "OP_EQUALVERIFY" => {
-                        // if stack is less than 2 return false
-                        if stack.len() < 2 {
-                            return Err("Stack underflow in OP_EQUALVERIFY".into())
-                        }
-                        // Otherwise pop the last two items from the stack and compare them
-                        // if they are not equal return false, if they are just continue
-                        let stack_item1 = stack.pop().unwrap();
-                        let stack_item2 = stack.pop().unwrap();
-                        if stack_item1 != stack_item2 {
-                            return Ok(false);
-                        }
-                    }
-                    "OP_CHECKSIG" => {
-                        // If the stack has less than two items return false
-                        if stack.len() < 2 {
-                            return Err("Stack underflow in OP_CHECKSIG".into());
-                        }
-                        // otherwise pop the last two items from the stack (pubkey and signature)
-                        // and validate the signature
-                        let pubkey = stack.pop().unwrap();
-                        let signature = stack.pop().unwrap();
-
-                        // using a place-holder for transaction data for now
-                        let serialized_tx = serialize_tx(transaction).unwrap();
-                        let is_valid_signature = verify_signature(signature, pubkey, serialized_tx);
-
-                        // verify_signature will return true if the signature is valid
-                        // otherwise false
-                        if is_valid_signature.is_err() {
-                            return Ok(false);
-                        }  else {
-                            continue
-                        }
-                        //return is_valid_signature;
-                    }
-                    _ => {
-                        // If it's not an operator,it'a ordinary data (like sig or pubkey) and push it onto the stack
-                        // Verify !!!
-                        let data = hex::decode(op).unwrap_or_default(); // Convert hex string to bytes
-                        stack.push(data);
-                    }
-                }
-
-            }
-            // Check final result
-            // If the stack has only one element and it's not empty, transaction is valid
-             if stack.len() == 1 && !stack.is_empty() {
-                 return Ok(true)
-             }
-        }
-        "p2sh" => {
-            todo!()
-        }
-        "v0_p2wpkh" => {
-            todo!()
-        }
-        "p2wsh" => {
-            todo!()
-        }
-        "v1_p2tr" => {
-            todo!()
-        }
-        _ => {
-            // If the script type is not recognized return false
-            return Ok(false);
-        }
+        // Copy the scriptpubkey to the scriptsig field
+        vin.scriptsig  = vin.prevout.scriptpubkey.clone();
     }
 
-    Ok(stack.len() == 1 && !stack.is_empty())
+    // Return the tx
+    Transaction {
+        version: transaction.version,
+        locktime: transaction.locktime,
+        vin: transaction.vin.clone(),
+        vout: transaction.vout.clone(),
+        sighash: transaction.sighash.clone(),
+    }
 }
 
-// TODO
-// Implement the BlockHeader function! Need to add the serialized block header to output.txt
+/// This function will validate a P2PKH transaction
+fn p2pkh_tx_validation(transaction: &mut Transaction) -> Result<bool, Box<dyn Error>> {
 
+    // Create a stack to hold the data
+    let mut stack: Vec<Vec<u8>> = Vec::new();
 
+    for (i,vin) in transaction.vin.iter().enumerate() {
 
-// TODO Before I turn it in
-// Implement the CoinbaseTx function! Need to add the serialized coinbase tx to output.txt
-// If the coinbase tx has a segwit tx according to BIP 141: all coinbase transactions since the segwit
-// upgrade need to include a witness reserved value in
-// the witness field for the input, and then use that along with a witness root hash to put a wTXID
-// commitment in the ScriptPubKey of one of the outputs in the transaction.
-fn create_coinbase_tx (total_tx_fee: u64) -> String {
-    // Hard coding the current block height I see on mempool.space and current block reward
-    let block_height: u32 = 837122;
-    let block_height_bytes = block_height.to_le_bytes();
-    let block_height_hex = hex::encode(block_height_bytes);
+        // Clearing the stack
+        stack.clear();
 
+        // Get ScriptSig and ScriptPubKey
+        // Should i just do this from the ScriptSig_asm???
+        let  scriptsig = &vin.scriptsig;
+        let scriptPubKey = &vin.prevout.scriptpubkey_asm.clone();
 
-    let block_sub_plus_fees: u64 = 625000000 + total_tx_fee; // Block reward in satoshis
-    let block_reward_bytes = block_sub_plus_fees.to_le_bytes();
-    let block_reward_hex = hex::encode(block_reward_bytes);
+        let (signature, pubkey) = get_signature_and_publickey_from_scriptsig(scriptsig)
+            .map_err(|e| format!("Error getting signature and public key from scriptsig for input {}: {}", i, e))?;
 
-    // adding an address to pay the block reward to
-    let address = String::from("36tvL5nHzSffbx4v9UhBfyGLWAkBUKyoxn");
-    // Same address converted to hex for serialization
-    let address = "053918f36132b92f65c11de2deeccf2f0b35177df3297ed5db".to_string();
+        // Prepare the transaction for signing
+        let mut tx_for_signing = transaction.clone();
+        tx_for_signing.vin = vec![vin.clone()];
+        let message_tx = get_tx_readyfor_signing_legacy(&mut tx_for_signing);
+        let serialized_tx_for_message = serialize_tx(&message_tx);
 
+        // Convert the serialized tx into bytes for the message
+        let message_in_bytes = hex::decode(serialized_tx_for_message)
+            .map_err(|e| format!("Failed to decode the hex string for input: {}", i))?;
 
-    let extra_nonce = String::from("SlanesukeSOBIntern2024");
-    let extra_nonce_hex = hex::encode(extra_nonce.as_bytes());
+        stack.push(hex::decode(signature).unwrap());
+        stack.push(hex::decode(pubkey).unwrap());
 
-    // Adding the block height and extra nonce to the coinbase input scriptSig
-    // the block height is in little endian byte order then encoding in hex
-    let block_scriptsig = format!("{}{}", block_height_hex, extra_nonce_hex);
+        for op in scriptPubKey.split_whitespace() {
+            match op {
+                "OP_DUP" => {
+                    // If the stack is empty return false
+                    // Otherwise clone the last item on the stack and push it to the stack
+                    if stack.last().is_none() {
+                        return Err(format!("Stack underflow in OP_DUP for input {}", i).into());
+                    }
+                    stack.push(stack.last().unwrap().clone());
+                }
+                "OP_HASH160"  => {
+                    // If the stack is empty return false
+                    // Otherwise take the last item from the stack, hash it with sha256 then ripemd160
+                    // and push it to the stack
+                    if let Some(pubkey) = stack.pop() {
+                        let hash = ripemd160(sha256(pubkey.clone()));
+                        stack.push(hash);
+                    } else {
+                        return Err(format!("Stack underflow in OP_HASH160 for input {}", i).into());
+                    }
+                }
+                "OP_EQUALVERIFY" => {
+                    // if stack is less than 2 return false
+                    if stack.len() < 2 {
+                        return Err(format!("Stack underflow in OP_EQUALVERIFY for input {}", i).into());
+                    }
+                    // Otherwise pop the last two items from the stack and compare them
+                    // if they are not equal return false, if they are just continue
+                    let stack_item1 = stack.pop().unwrap();
+                    let stack_item2 = stack.pop().unwrap();
+                    if stack_item1 != stack_item2 {
+                        return Err(format!("OP_EQUALVERIFY failed for input {}", i).into());
+                    }
+                }
+                "OP_CHECKSIG" => {
+                    // If the stack has less than two items return false
+                    if stack.len() < 2 {
+                        return Err(format!("Stack underflow in OP_CHECKSIG for input {}", i).into());
+                    }
+                    // otherwise pop the last two items from the stack (pubkey and signature)
+                    // and validate the signature
+                    let pubkey = stack.pop().unwrap();
+                    let signature = stack.pop().unwrap();
 
+                    // using a place-holder for transaction data for now
+                    //let serialized_tx = serialize_tx(transaction).unwrap();
+                    let is_valid_signature = verify_signature(signature, pubkey, message_in_bytes.clone());
 
+                    // verify_signature will return true if the signature is valid
+                    // otherwise false
+                    if is_valid_signature.is_err() {
+                        return Err(format!("Invalid signature for input {}", i).into());
+                    }
+                    //return is_valid_signature;
+                }
+                _ => {
+                    // If it's not an operator,it'a ordinary data (like sig or pubkey) and push it onto the stack
+                    // Verify !!!
+                    let data = hex::decode(op).unwrap_or_default(); // Convert hex string to bytes
+                    stack.push(data);
+                }
+            }
+        }
 
-    // Finish manually serializing the coinbase tx.
-    // Left off concantingating the scriptPubKey SIze
-    // The address might need to be in hex
-    let version = "01000000".to_string();
-    let input_count = "01".to_string();
-    let txid = "0000000000000000000000000000000000000000000000000000000000000000";
-    let vout = "ffffffff";
-    let scriptsig_size = format!("{:02x}", block_scriptsig.len()/2);
-    let sequence = "ffffffff";
-    let output_count = "01".to_string();
-    let scriptpubkey_size = format!("{:02x}", address.len()/2);
-    let locktime = "00000000";
-
-
-    let serialized_coinbase_tx = format!("{}{}{}{}{}{}{}{}{}{}{}{}", version, input_count, txid,
-        vout, scriptsig_size, block_scriptsig, sequence, output_count, block_reward_hex, scriptpubkey_size,
-    address, locktime);
-
-    serialized_coinbase_tx
+        if stack.len() != 1 || stack.is_empty() {
+            return Err(format!("Final stack validation failed for input {}", i).into());
+        }
+    }
+    Ok(true)
 }
 
-// TODO
-// Need to get my head together and figure out how to simplify and verify the .json transactions. After
-// that i need to write a mining algo to efficiently fit the transactions with the highest fees into a block
-// and pass the block fees to coinbase tx so I can add it to the block reward.
-// Need to then just get there txid's and put them in a vec to add to output.txt
 
-
-
-
+/// Hashing Functions
 // Takes in data and returns a ripemd160 hash
 fn ripemd160(data: Vec<u8>) -> Vec<u8> {
     let mut hasher = Ripemd160::new();
@@ -627,9 +564,11 @@ fn sha256(data: Vec<u8>) -> Vec<u8> {
     hasher.finalize().to_vec()
 }
 
-
-
-
+fn double_sha256(input: Vec<u8>) -> [u8; 32] {
+    let first_hash = sha256(input);
+    let second_hash = sha256(first_hash);
+    second_hash.try_into().expect("Expected a Vec<u8> of length 32")
+}
 
 /// Creating the file
 // This function will create a file with the given filename and write contents to it
@@ -644,6 +583,8 @@ fn append_to_file(filename: &str, contents: &str) -> io::Result<()> {
     Ok(())
 }
 
+/// This function will generate the output file
+// May remove the formatting
 fn generate_output_file(block_header: &str, coinbase_tx: String, txids_vec: &Vec<&str>)
     -> io::Result<()> {
     let file = "../output.txt";
@@ -673,90 +614,92 @@ fn generate_output_file(block_header: &str, coinbase_tx: String, txids_vec: &Vec
 }
 
 
-
 fn main() {
-    // Path to one transaction
-    //let path = "../mempool/0a70cacb1ac276056e57ebfb0587d2091563e098c618eebf4ed205d123a3e8c4.json";
-    let path= "../mempool/5e26eb673e26370b7bfb149f07cd03cba741e7ddc44748ec42c5b89b0d6a650e.json";
 
-    // Deserialize the transaction
-    let tx = match deserialize_tx(path) {
-        Ok(tx) => tx,
+    // Each of these is a p2pkh  tx
+    let filename = "../mempool/02c2897472e47228381f399d5303d9f64e91348e78ec0fd8f2da5835cf2cd303.json";
+    let filename ="../mempool/0b9e15adfefab6416bef64ca1fa37516f89f7d8cd106103c67c6f55a3c7565ad.json";
+    let filename ="../mempool/0bb03d9b895da867f0c76fd45c4d3d8998a8cb9b70ea56e32087f9f78cfd13e5.json";
+
+    // Deserialize the transaction from the file.
+    let mut transaction = deserialize_tx(filename);
+
+    // Validate the transaction
+    match p2pkh_tx_validation(&mut transaction) {
+        Ok(is_valid) => {
+            if is_valid {
+                println!("The transaction is valid.");
+            } else {
+                println!("The transaction is not valid.");
+            }
+        }
         Err(e) => {
-            eprintln!("Error!!! {}", e);
-            return;
-        },
-    };
-
-    // Serialize the transaction
-    let serialized_tx = match serialize_tx(&tx) {
-        Ok(stx) => stx,
-        Err(e) => {
-            eprintln!("Error!!! {}", e);
-            return;
-        },
-    };
-
-    // Verify the script for each input in the transaction
-    for vin in &tx.vin {
-        let scriptpubkey_asm = &vin.prevout.scriptpubkey_asm;
-        let script_type = &vin.prevout.scriptpubkey_type;
-        let scriptsig = &vin.scriptsig;
-
-        let is_valid_script = match verify_script(scriptpubkey_asm, script_type, scriptsig, &tx, serialized_tx.clone()) {
-            Ok(is_valid) => is_valid,
-            Err(e) => {
-                eprintln!("Error!!! {}", e);
-                return;
-            },
-        };
-
-        println!("Is valid script: {}", is_valid_script);
+            println!("An error occurred during validation: {}", e);
+        }
     }
+
 }
 
 
 
+// This main fuction is for testing things and seeing sigantues, pubkeys, and transactions
 // fn main() {
-//     // Path to one transaction
-//     // Test for a p2pkh transaction
-//     let path = "../mempool/0a70cacb1ac276056e57ebfb0587d2091563e098c618eebf4ed205d123a3e8c4.json";
+//     // The file containing the JSON representation of the transaction.
+//     let filename = "../mempool/02c2897472e47228381f399d5303d9f64e91348e78ec0fd8f2da5835cf2cd303.json";
 //
-//     // Test for a v0_p2wpkh transaction
-//     //let path = "../mempool/0aac03973f3d348fffb25fd7b802b22b120b0d276d655e557aee0a993ed4c0b7.json";
+//     // Deserialize the transaction from the file.
+//     let mut transaction = deserialize_tx(filename);
 //
-//     // match deserialize_tx(path) {
-//     //     Ok(tx) => println!("Deserialized Transaction is \n {:#?}", tx),
-//     //     Err(e) => eprintln!("Error!!! {}", e),
-//     // }
-//     let tx = deserialize_tx(path).unwrap();
 //
-//     // Test for serialized legacy tx
-//     let serialized_tx = serialize_tx(&tx).unwrap();
-//     //let serialized_segwit_tx = serialized_segwit_tx(&tx).unwrap();
+//     let scriptsig = transaction.vin[0].scriptsig.clone();
+//     let (signature, pubkey) = get_signature_and_publickey_from_scriptsig(&scriptsig).unwrap();
+//     println!("Signature: {}", signature);
+//     let signature = &signature[..signature.len()-2];
+//     println!("ScriptSig: {}", scriptsig);
+//     println!("Signature without sighash_type: {}", signature);
+//     println!("Pubkey: {}", pubkey);
 //
-//     eprintln!("Serialized Transaction is \n {:#?}", serialized_tx);
-//     //eprintln!("Serialized Transaction is \n {:#?}", serialized_tx);
 //
+//
+//     let message_tx = get_tx_readyfor_signing_legacy(&mut transaction);
+//     let serialized_tx_for_message = serialize_tx(&message_tx);
+//     println!();
+//     println!("Transaction JSON for signing: {:#?}", message_tx);
+//
+//     println!();
+//     println!("Serialized for signing TX: {}", serialized_tx_for_message);
+//     println!();
+//     let message_tx_bytes = hex::decode(serialized_tx_for_message).expect("Failed to decode hex string");
+//     let hash_array: [u8; 32] = double_sha256(message_tx_bytes);
+//
+//
+//
+//     let secp = Secp256k1::new();
+//
+//     // Creating a message, public key and signature
+//
+//
+//     let sig_bytes = hex::decode(&signature).unwrap();
+//     let pubkey_bytes = hex::decode(&pubkey).unwrap();
+//
+//
+//     let message_result = Message::from_digest_slice(&hash_array).unwrap();
+//     let public_key =  PublicKey::from_slice(&pubkey_bytes).expect("Failed to create public key");
+//     let signature = Signature::from_der(&sig_bytes).unwrap();
+//
+//
+//
+//     // Return Ok(true) if the signature is valid, Ok(false) if it's invalid
+//     match secp.verify_ecdsa(&message_result, &signature,  &public_key) {
+//         Ok(_) => {
+//             println!("The signature is valid");
+//         },
+//         Err(e) => {
+//             println!("The signature is invalid: {}", e);
+//         },
+//     }
 //
 // }
-// fn main() -> io::Result<()> {
-//
-//
-//
-//     let serialized_block_header = "Block header place holder for now";
-//
-//     let total_tx_fee = 0; // Place-holder for now because I need to somehow calculate the tx fee
-//     let coinbase_tx: String = create_coinbase_tx(total_tx_fee);
-//
-//
-//
-//     let txid_list = vec!["txid1 test ", "txid2 test ", "txid3 testtttt"];
-//
-//     // generate_output_file(serialized_block_header, serialized_coinbase_tx, &txid_list)?;
-//     generate_output_file(serialized_block_header, coinbase_tx, &txid_list)?;
-//
-//     Ok(())
-// }
+
 
 
