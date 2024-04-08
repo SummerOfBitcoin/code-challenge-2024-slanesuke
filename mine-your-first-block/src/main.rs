@@ -446,6 +446,8 @@ fn get_tx_readyfor_signing_legacy(transaction : &mut Transaction) -> Transaction
 }
 
 /// This function will validate a P2PKH transaction
+///
+/// // FIgure out stack managment
 fn p2pkh_tx_validation(transaction: &mut Transaction) -> Result<bool, Box<dyn Error>> {
 
     // Create a stack to hold the data
@@ -511,6 +513,8 @@ fn p2pkh_tx_validation(transaction: &mut Transaction) -> Result<bool, Box<dyn Er
                     // Otherwise pop the last two items from the stack and compare them
                     // if they are not equal return false, if they are just continue
                     let stack_item1 = stack.pop().unwrap();
+                    // unsure why but i diregard an extra item on the stack
+                    // then it compares the top two items
                     let stack_temp = stack.pop().unwrap();
                     let stack_item2 = stack.pop().unwrap();
                     if stack_item1 != stack_item2 {
@@ -527,16 +531,52 @@ fn p2pkh_tx_validation(transaction: &mut Transaction) -> Result<bool, Box<dyn Er
                     let pubkey = stack.pop().unwrap();
                     let signature = stack.pop().unwrap();
 
+                    println!("The serialized message sent to the verify_signature function: {}", hex::encode(&message_in_bytes));
+
+                    // Convert pubkey and signature to hex strings for printing for checking
+                    // let pubkey_hex = hex::encode(&pubkey);
+                    // let signature_hex = hex::encode(&signature);
+                    //
+                    // // Print out the pubkey and signature
+                    // println!("Verifying signature for input {}: \nPubKey: {}\nSignature: {}", i, pubkey_hex, signature_hex);
+
                     // using a place-holder for transaction data for now
                     //let serialized_tx = serialize_tx(transaction).unwrap();
-                    let is_valid_signature = verify_signature(signature, pubkey, message_in_bytes.clone());
+                    // let is_valid_signature = verify_signature(signature, pubkey, message_in_bytes.clone());
+                    //
+                    // // verify_signature will return true if the signature is valid
+                    // // otherwise false
+                    // if is_valid_signature.is_err() {
+                    //     return Err(format!("Invalid signature for input {}", i).into());
+                    // } else {
+                    //     stack.push(vec![1]);
+                    // }
+                    // //return is_valid_signature;
 
-                    // verify_signature will return true if the signature is valid
-                    // otherwise false
-                    if is_valid_signature.is_err() {
-                        return Err(format!("Invalid signature for input {}", i).into());
+                    match verify_signature(signature.clone(), pubkey.clone(), message_in_bytes.clone()) {
+                        Ok(true) => {
+                            // If the signature is valid, push a truthy value onto the stack to indicate success
+                            stack.push(vec![1]);
+                        },
+                        Ok(false) => {
+                            // The signature verification was successful but reported the signature as invalid
+                            let pubkey_hex = hex::encode(&pubkey);
+                            let signature_hex = hex::encode(&signature);
+                            return Err(format!(
+                                "Signature verification failed for input {}. The signature does not match the provided public key and message. PubKey: {}, Signature: {}",
+                                i, pubkey_hex, signature_hex
+                            ).into());
+                        },
+                        Err(e) => {
+                            // An error occurred during the signature verification process
+                            return Err(format!(
+                                "An error occurred while verifying the signature for input {}: {}",
+                                i, e
+                            ).into());
+                        }
                     }
-                    //return is_valid_signature;
+
+
                 }
                 _ => {
                     // If it's not an operator,it'a ordinary data (like sig or pubkey) and push it onto the stack
@@ -546,11 +586,13 @@ fn p2pkh_tx_validation(transaction: &mut Transaction) -> Result<bool, Box<dyn Er
                 }
             }
         }
-
         if stack.len() != 1 || stack.is_empty() {
             return Err(format!("Final stack validation failed for input {}", i).into());
         }
     }
+
+
+
     Ok(true)
 }
 
@@ -625,7 +667,7 @@ fn main() {
     // Each of these is a p2pkh  tx
     let filename = "../mempool/02c2897472e47228381f399d5303d9f64e91348e78ec0fd8f2da5835cf2cd303.json";
     let filename ="../mempool/0b9e15adfefab6416bef64ca1fa37516f89f7d8cd106103c67c6f55a3c7565ad.json";
-    let filename ="../mempool/0bb03d9b895da867f0c76fd45c4d3d8998a8cb9b70ea56e32087f9f78cfd13e5.json";
+    //let filename ="../mempool/0bb03d9b895da867f0c76fd45c4d3d8998a8cb9b70ea56e32087f9f78cfd13e5.json";
 
     // Deserialize the transaction from the file.
     let mut transaction = deserialize_tx(filename);
