@@ -19,6 +19,7 @@ use secp256k1::{PublicKey, Secp256k1, Message};
 use std::error::Error;
 use std::fs;
 use secp256k1::ecdsa::Signature;
+use sha2::digest::core_api::Block;
 
 
 // Transaction struct that may be overcomplicated right now. We will see
@@ -59,6 +60,15 @@ struct Vout {
     scriptpubkey_type: String,
     scriptpubkey_address: Option<String>,
     value: u64,
+}
+
+struct BlockHeader {
+    version: u32,
+    prev_block_hash: String,
+    merkle_root: String,
+    timestamp: u32,
+    bits: u32,
+    nonce: u32
 }
 
 // TODO Before I turn it in
@@ -114,6 +124,37 @@ fn create_coinbase_tx (total_tx_fee: u64) -> String {
                                          address, locktime);
 
     serialized_coinbase_tx
+}
+
+fn block_header(valid_tx_vec: Vec<(String, u64)>, coinbase_tx: String) -> BlockHeader {
+    let mut block_header = BlockHeader{
+        version: 0,
+        prev_block_hash: "".to_string(),
+        merkle_root: "".to_string(),
+        timestamp: 0,
+        bits: 0,
+        nonce: 0,
+    };
+    // The default block version using a BIP 9 bit field is 0b00100000000000000000000000000000.
+    // In hex this is 0x20000000 little endian
+    let block_version = 0b00100000000000000000000000000000u32.to_le_bytes();
+    let block_version_hex = hex::encode(block_version);
+    block_header.version = block_version_hex.parse().unwrap();
+
+    // I chose to use block height 837122 for my block just becase that was the current block height
+    // at the time of my project (when i made my coinbase tx fn)
+    // So I will use the previous block hash of block 837121
+    let prev_block_hash = "0000000000000000000205e5b86991b1b0a370fb7e2b7126d32de18e48e556c4";
+    block_header.prev_block_hash = prev_block_hash.to_string();
+
+    // Left off on merkle root!!  Lets go!
+
+
+
+
+
+
+    block_header
 }
 
 // TODO
@@ -753,34 +794,10 @@ fn main() {
                 println!("Transaction ID: {}, Fee: {}", txid, fee);
             }
         },
-        Err(e) => eprintln!("An error occurred while processing the mempool: {}", e),
+        // Err(e) => eprintln!("An error occurred while processing the mempool: {}", e),
+        _ => todo!(),
     }
 }
 
-// fn main() {
-//
-//     // Each of these is a p2pkh  tx
-//     let filename = "../mempool/02c2897472e47228381f399d5303d9f64e91348e78ec0fd8f2da5835cf2cd303.json";
-//     let filename ="../mempool/0b9e15adfefab6416bef64ca1fa37516f89f7d8cd106103c67c6f55a3c7565ad.json";
-//     let filename ="../mempool/0bb03d9b895da867f0c76fd45c4d3d8998a8cb9b70ea56e32087f9f78cfd13e5.json";
-//
-//     // Deserialize the transaction from the file.
-//     let mut transaction = deserialize_tx(filename);
-//
-//     // Validate the transaction
-//     match p2pkh_script_validation(&mut transaction) {
-//         Ok(is_valid) => {
-//             if is_valid {
-//                 println!("The transaction is valid.");
-//             } else {
-//                 println!("The transaction is not valid.");
-//             }
-//         }
-//         Err(e) => {
-//             println!("An error occurred during validation: {}", e);
-//         }
-//     }
-//
-// }
 
 
