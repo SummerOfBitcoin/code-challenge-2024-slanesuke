@@ -473,11 +473,7 @@ fn check_double_spending(transaction: &Transaction, mempool: &Vec<Transaction>) 
     true
 }
 
-
-
 /// This function will validate a P2PKH transaction
-///
-/// // FIgure out stack managment
 fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<bool, Box<dyn Error>> {
 
     // Create a stack to hold the data
@@ -615,6 +611,19 @@ fn remove_dust_transactions(transaction: &mut Transaction, min_fee_per_byte: u64
     transaction.vout.retain(|output| !is_dust_output(output, min_fee_per_byte));
 }
 
+/// Function to get the tx amount so
+fn verify_tx_fee(transaction: &Transaction) -> u64 {
+    let total_input_amount: u64 = transaction.vin.iter()
+        .map(|input| input.prevout.value)
+        .sum();
+
+    let total_output_amount: u64 = transaction.vout.iter()
+        .map(|output| output.value)
+        .sum();
+
+    total_input_amount - total_output_amount
+}
+
 
 /// Hashing Functions
 // Takes in data and returns a ripemd160 hash
@@ -651,6 +660,7 @@ fn append_to_file(filename: &str, contents: &str) -> io::Result<()> {
 }
 
 /// Combing through the meempool folder
+// Need to implement logic so that if it passes all these checks it will be added to a vec
 fn process_mempool(mempool_path: &str) -> io::Result<()> {
     for tx in fs::read_dir(mempool_path)? {
         let tx = tx?;
@@ -661,10 +671,6 @@ fn process_mempool(mempool_path: &str) -> io::Result<()> {
                 // I can add this once i put all the valid tx's  in a vec
                 // if !check_double_spending(&transaction, Vec<>) {
                 //   continue;
-                // }
-                // if let Err(e) = p2pkh_script_validation(&mut transaction).unwrap() {
-                //     println!("Transaction is not valid: {:?}", path);
-                //     continue;
                 // }
 
                 match p2pkh_script_validation(&mut transaction) {
@@ -678,6 +684,18 @@ fn process_mempool(mempool_path: &str) -> io::Result<()> {
                         eprintln!("An error occured, failed to validate transaction: {:?}", e);
                         continue;
                     }
+                }
+
+                match verify_tx_fee(&transaction) {
+                    fee if fee < 0 => {
+                        eprintln!("Transaction has a negative fee: {:?}", path);
+                        continue;
+                    },
+                    fee if fee < 1000 => {
+                        eprintln!("Transaction has a fee below 1000 satoshis: {:?}", path);
+                        continue;
+                    },
+                    _ => {}
                 }
 
                 // Remove dust transactions
