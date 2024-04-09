@@ -17,6 +17,7 @@ use std::fs::OpenOptions;
 extern crate secp256k1;
 use secp256k1::{PublicKey, Secp256k1, Message};
 use std::error::Error;
+use std::fs;
 use secp256k1::ecdsa::Signature;
 
 
@@ -412,13 +413,20 @@ fn get_signature_and_publickey_from_scriptsig(scriptsig: &str) -> Result<(String
     Ok((sig_and_pubkey_vec[0].clone(), sig_and_pubkey_vec[1].clone()))
 }
 
-/// This function will get the tx ready for signing by removing the scriptsig and adding the
-/// scriptpubkeyto the scriptsig field and adding the sighash to the transaction
+// This function will get the tx ready for signing by removing the scriptsig and adding the
+// scriptpubkeyto the scriptsig field and adding the sighash to the transaction
 fn get_tx_readyfor_signing_legacy(transaction : &mut Transaction) -> Transaction {
-
+    // Get the signature and public key from the scriptsig
     let scriptsig = &transaction.vin[0].scriptsig;
     let (signature, pubkey) = get_signature_and_publickey_from_scriptsig(scriptsig).unwrap();
 
+    // removing the scriptsig for each vin and adding the scriptpubkey to the scriptsig field
+    for vin in transaction.vin.iter_mut() {
+        vin.scriptsig = String::new();
+        vin.scriptsig = vin.prevout.scriptpubkey.clone();
+    }
+
+    // Using the last two bytes of the signature as the sighash type for now
     let sighash_type = &signature[signature.len()-2..];
 
     // Hard coding the sighash type for now
@@ -447,10 +455,30 @@ fn get_tx_readyfor_signing_legacy(transaction : &mut Transaction) -> Transaction
     }
 }
 
+// Check double spend
+fn check_double_spending(transaction: &Transaction, mempool: &Vec<Transaction>) -> bool {
+    // Loop through mempool
+    for tx in mempool {
+        // Loop through the vin of the transaction
+        for vin in &tx.vin {
+            // Loop through the vin of the mempool tx
+            for vin2 in &transaction.vin {
+                // If the txid and vout match return false
+                if vin.txid == vin2.txid && vin.vout == vin2.vout {
+                    return false; // DOuble spent!!
+                }
+            }
+        }
+    }
+    true
+}
+
+
+
 /// This function will validate a P2PKH transaction
 ///
 /// // FIgure out stack managment
-fn p2pkh_tx_validation(transaction: &mut Transaction) -> Result<bool, Box<dyn Error>> {
+fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<bool, Box<dyn Error>> {
 
     // Create a stack to hold the data
     let mut stack: Vec<Vec<u8>> = Vec::new();
@@ -483,7 +511,6 @@ fn p2pkh_tx_validation(transaction: &mut Transaction) -> Result<bool, Box<dyn Er
         stack.push(decoded_signature);
         stack.push(decoded_pubkey);
 
-        let mut hash_result: String = "".to_string();
         for op in scriptPubKey.split_whitespace() {
             match op {
                 "OP_DUP" => {
@@ -502,7 +529,6 @@ fn p2pkh_tx_validation(transaction: &mut Transaction) -> Result<bool, Box<dyn Er
                         let sha256_hash = sha256(pubkey);
                         let ripemd160_hash = ripemd160(sha256_hash);
                         stack.push(ripemd160_hash.clone());
-                        hash_result = format!("{}",hex::encode(&ripemd160_hash));
                     } else {
                         return Err(format!("Stack underflow in OP_HASH160 for input {}", i).into());
                     }
@@ -520,7 +546,7 @@ fn p2pkh_tx_validation(transaction: &mut Transaction) -> Result<bool, Box<dyn Er
                     let stack_temp = stack.pop().unwrap();
                     let stack_item2 = stack.pop().unwrap();
                     if stack_item1 != stack_item2 {
-                        return Err(format!("Stackitem1: {} aND Stackitem 2: {} and Hash: {} .OP_EQUALVERIFY failed for input {}",hex::encode(stack_item1), hex::encode(stack_item2),hash_result, i).into());
+                        return Err(format!("Stackitem1: {} aND Stackitem 2: {} and Hash: {} .OP_EQUALVERIFY failed for input",hex::encode(stack_item1), hex::encode(stack_item2), i).into());
                     }
                 }
                 "OP_CHECKSIG" => {
@@ -533,27 +559,6 @@ fn p2pkh_tx_validation(transaction: &mut Transaction) -> Result<bool, Box<dyn Er
                     let pubkey = stack.pop().unwrap();
                     let signature = stack.pop().unwrap();
 
-                    println!("The serialized message sent to the verify_signature function: {}", hex::encode(&message_in_bytes));
-
-                    // Convert pubkey and signature to hex strings for printing for checking
-                    // let pubkey_hex = hex::encode(&pubkey);
-                    // let signature_hex = hex::encode(&signature);
-                    //
-                    // // Print out the pubkey and signature
-                    // println!("Verifying signature for input {}: \nPubKey: {}\nSignature: {}", i, pubkey_hex, signature_hex);
-
-                    // using a place-holder for transaction data for now
-                    //let serialized_tx = serialize_tx(transaction).unwrap();
-                    // let is_valid_signature = verify_signature(signature, pubkey, message_in_bytes.clone());
-                    //
-                    // // verify_signature will return true if the signature is valid
-                    // // otherwise false
-                    // if is_valid_signature.is_err() {
-                    //     return Err(format!("Invalid signature for input {}", i).into());
-                    // } else {
-                    //     stack.push(vec![1]);
-                    // }
-                    // //return is_valid_signature;
 
                     match verify_signature(signature.clone(), pubkey.clone(), message_in_bytes.clone()) {
                         Ok(true) => {
@@ -593,9 +598,21 @@ fn p2pkh_tx_validation(transaction: &mut Transaction) -> Result<bool, Box<dyn Er
         }
     }
 
-
-
     Ok(true)
+}
+
+/// This function will remove dust transactions from a transaction
+// I will need to look more into this
+fn is_dust_output(output: &Vout, min_fee_per_byte: u64) -> bool {
+    // Looked up the avg size of a P2PKH input
+    let input_size = 148;
+    // Calculate the minimum value that makes spending this output worthwhile
+    let min_output_value = input_size * min_fee_per_byte;
+    output.value < min_output_value
+}
+
+fn remove_dust_transactions(transaction: &mut Transaction, min_fee_per_byte: u64) {
+    transaction.vout.retain(|output| !is_dust_output(output, min_fee_per_byte));
 }
 
 
@@ -633,6 +650,51 @@ fn append_to_file(filename: &str, contents: &str) -> io::Result<()> {
     Ok(())
 }
 
+/// Combing through the meempool folder
+fn process_mempool(mempool_path: &str) -> io::Result<()> {
+    for tx in fs::read_dir(mempool_path)? {
+        let tx = tx?;
+        let path = tx.path();
+        if path.is_file() {
+            if let Some(path_str) = path.to_str() {
+                let mut transaction = deserialize_tx(path_str);
+                // I can add this once i put all the valid tx's  in a vec
+                // if !check_double_spending(&transaction, Vec<>) {
+                //   continue;
+                // }
+                // if let Err(e) = p2pkh_script_validation(&mut transaction).unwrap() {
+                //     println!("Transaction is not valid: {:?}", path);
+                //     continue;
+                // }
+
+                match p2pkh_script_validation(&mut transaction) {
+                    Ok(is_valid) => {
+                        if !is_valid {
+                            eprintln!("Transaction is not valid: {:?}", path);
+                            continue;
+                        }
+                    },
+                    Err(e) => {
+                        eprintln!("An error occured, failed to validate transaction: {:?}", e);
+                        continue;
+                    }
+                }
+
+                // Remove dust transactions
+                let min_relay_fee_per_byte: u64 = 3; // 3 satoshis per byte  could go up or down 1-5
+                remove_dust_transactions(&mut transaction, min_relay_fee_per_byte);
+
+
+                println!("Transaction is valid");
+            }else {
+                eprintln!("Failed to convert path to string: {:?}", path);
+            }
+        }
+    }
+    Ok(())
+}
+
+
 /// This function will generate the output file
 // May remove the formatting
 fn generate_output_file(block_header: &str, coinbase_tx: String, txids_vec: &Vec<&str>)
@@ -667,15 +729,15 @@ fn generate_output_file(block_header: &str, coinbase_tx: String, txids_vec: &Vec
 fn main() {
 
     // Each of these is a p2pkh  tx
-    //let filename = "../mempool/02c2897472e47228381f399d5303d9f64e91348e78ec0fd8f2da5835cf2cd303.json";
+    let filename = "../mempool/02c2897472e47228381f399d5303d9f64e91348e78ec0fd8f2da5835cf2cd303.json";
     let filename ="../mempool/0b9e15adfefab6416bef64ca1fa37516f89f7d8cd106103c67c6f55a3c7565ad.json";
-    //let filename ="../mempool/0bb03d9b895da867f0c76fd45c4d3d8998a8cb9b70ea56e32087f9f78cfd13e5.json";
+    let filename ="../mempool/0bb03d9b895da867f0c76fd45c4d3d8998a8cb9b70ea56e32087f9f78cfd13e5.json";
 
     // Deserialize the transaction from the file.
     let mut transaction = deserialize_tx(filename);
 
     // Validate the transaction
-    match p2pkh_tx_validation(&mut transaction) {
+    match p2pkh_script_validation(&mut transaction) {
         Ok(is_valid) => {
             if is_valid {
                 println!("The transaction is valid.");
@@ -689,7 +751,5 @@ fn main() {
     }
 
 }
-
-
 
 
