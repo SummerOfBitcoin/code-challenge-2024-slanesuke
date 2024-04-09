@@ -487,7 +487,7 @@ fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<bool, Box<dy
         // Get ScriptSig and ScriptPubKey
         // Should i just do this from the ScriptSig_asm???
         let  scriptsig = &vin.scriptsig;
-        let scriptPubKey = &vin.prevout.scriptpubkey_asm.clone();
+        let script_pub_key = &vin.prevout.scriptpubkey_asm.clone();
 
         let (signature, pubkey) = get_signature_and_publickey_from_scriptsig(scriptsig)
             .map_err(|e| format!("Error getting signature and public key from scriptsig for input {}: {}", i, e))?;
@@ -507,7 +507,7 @@ fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<bool, Box<dy
         stack.push(decoded_signature);
         stack.push(decoded_pubkey);
 
-        for op in scriptPubKey.split_whitespace() {
+        for op in script_pub_key.split_whitespace() {
             match op {
                 "OP_DUP" => {
                     // If the stack is empty return false
@@ -661,7 +661,9 @@ fn append_to_file(filename: &str, contents: &str) -> io::Result<()> {
 
 /// Combing through the meempool folder
 // Need to implement logic so that if it passes all these checks it will be added to a vec
-fn process_mempool(mempool_path: &str) -> io::Result<()> {
+fn process_mempool(mempool_path: &str) -> io::Result<Vec<(String, u64)>> {
+    let mut valid_txs = Vec::new();
+
     for tx in fs::read_dir(mempool_path)? {
         let tx = tx?;
         let path = tx.path();
@@ -686,16 +688,14 @@ fn process_mempool(mempool_path: &str) -> io::Result<()> {
                     }
                 }
 
-                match verify_tx_fee(&transaction) {
-                    fee if fee < 0 => {
-                        eprintln!("Transaction has a negative fee: {:?}", path);
-                        continue;
-                    },
-                    fee if fee < 1000 => {
-                        eprintln!("Transaction has a fee below 1000 satoshis: {:?}", path);
-                        continue;
-                    },
-                    _ => {}
+                // Get the fee if valid so  i can add it to my vec
+                let fee = verify_tx_fee(&transaction);
+                if fee < 0 {
+                    eprintln!("Transaction has a negative fee: {:?}", path);
+                    continue;
+                } else if fee < 1000 {
+                    eprintln!("Transaction has a fee below 1000 satoshis: {:?}", path);
+                    continue;
                 }
 
                 // Remove dust transactions
@@ -703,13 +703,14 @@ fn process_mempool(mempool_path: &str) -> io::Result<()> {
                 remove_dust_transactions(&mut transaction, min_relay_fee_per_byte);
 
 
-                println!("Transaction is valid");
+                println!("Transaction is valid for txid: {}", transaction.vin[0].txid);
+                valid_txs.push((transaction.vin[0].txid.clone(), fee));
             }else {
                 eprintln!("Failed to convert path to string: {:?}", path);
             }
         }
     }
-    Ok(())
+    Ok(valid_txs)
 }
 
 
@@ -745,29 +746,41 @@ fn generate_output_file(block_header: &str, coinbase_tx: String, txids_vec: &Vec
 
 
 fn main() {
-
-    // Each of these is a p2pkh  tx
-    let filename = "../mempool/02c2897472e47228381f399d5303d9f64e91348e78ec0fd8f2da5835cf2cd303.json";
-    let filename ="../mempool/0b9e15adfefab6416bef64ca1fa37516f89f7d8cd106103c67c6f55a3c7565ad.json";
-    let filename ="../mempool/0bb03d9b895da867f0c76fd45c4d3d8998a8cb9b70ea56e32087f9f78cfd13e5.json";
-
-    // Deserialize the transaction from the file.
-    let mut transaction = deserialize_tx(filename);
-
-    // Validate the transaction
-    match p2pkh_script_validation(&mut transaction) {
-        Ok(is_valid) => {
-            if is_valid {
-                println!("The transaction is valid.");
-            } else {
-                println!("The transaction is not valid.");
+    let mempool_path = "../mempool";
+    match process_mempool(mempool_path) {
+        Ok(valid_transactions) => {
+            for (txid, fee) in valid_transactions {
+                println!("Transaction ID: {}, Fee: {}", txid, fee);
             }
-        }
-        Err(e) => {
-            println!("An error occurred during validation: {}", e);
-        }
+        },
+        Err(e) => eprintln!("An error occurred while processing the mempool: {}", e),
     }
-
 }
+
+// fn main() {
+//
+//     // Each of these is a p2pkh  tx
+//     let filename = "../mempool/02c2897472e47228381f399d5303d9f64e91348e78ec0fd8f2da5835cf2cd303.json";
+//     let filename ="../mempool/0b9e15adfefab6416bef64ca1fa37516f89f7d8cd106103c67c6f55a3c7565ad.json";
+//     let filename ="../mempool/0bb03d9b895da867f0c76fd45c4d3d8998a8cb9b70ea56e32087f9f78cfd13e5.json";
+//
+//     // Deserialize the transaction from the file.
+//     let mut transaction = deserialize_tx(filename);
+//
+//     // Validate the transaction
+//     match p2pkh_script_validation(&mut transaction) {
+//         Ok(is_valid) => {
+//             if is_valid {
+//                 println!("The transaction is valid.");
+//             } else {
+//                 println!("The transaction is not valid.");
+//             }
+//         }
+//         Err(e) => {
+//             println!("An error occurred during validation: {}", e);
+//         }
+//     }
+//
+// }
 
 
