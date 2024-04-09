@@ -145,9 +145,6 @@ fn deserialize_tx(filename: &str) -> Transaction {
 
 /// This function will serialize a transaction into a string of hex bytes
 fn serialize_tx(transaction: &Transaction) -> String {
-    // This function needs to serialize the transaction into bytes
-
-
     // Returning the serialized tx as a string
     let mut serialized_tx = String::new();
 
@@ -161,7 +158,14 @@ fn serialize_tx(transaction: &Transaction) -> String {
 
     // Sereialize txid
     for vin in &transaction.vin {
-        serialized_tx.push_str(&vin.txid);
+        //serialized_tx.push_str(&vin.txid);
+
+        // I believe the txid needs to be in reversed byte order
+        let txid_bytes = hex::decode(&vin.txid).unwrap();
+        let reversed_txid_bytes: Vec<u8> = txid_bytes.into_iter().rev().collect();
+        let reversed_txid = hex::encode(reversed_txid_bytes);
+        serialized_tx.push_str(&reversed_txid);
+
 
         let vout = &vin.vout.to_le_bytes();
         serialized_tx.push_str(&hex::encode(vout));
@@ -420,11 +424,9 @@ fn get_tx_readyfor_signing_legacy(transaction : &mut Transaction) -> Transaction
     // Hard coding the sighash type for now
      let sighash = format!("{}000000", sighash_type);
 
-
     // Adding the sighash to the transaction
     // It turns a string into a u32
     transaction.sighash = Some(sighash);
-
 
     // Emptying the scriptsig fields for each input
     for vin in transaction.vin.iter_mut() {
@@ -665,7 +667,7 @@ fn generate_output_file(block_header: &str, coinbase_tx: String, txids_vec: &Vec
 fn main() {
 
     // Each of these is a p2pkh  tx
-    let filename = "../mempool/02c2897472e47228381f399d5303d9f64e91348e78ec0fd8f2da5835cf2cd303.json";
+    //let filename = "../mempool/02c2897472e47228381f399d5303d9f64e91348e78ec0fd8f2da5835cf2cd303.json";
     let filename ="../mempool/0b9e15adfefab6416bef64ca1fa37516f89f7d8cd106103c67c6f55a3c7565ad.json";
     //let filename ="../mempool/0bb03d9b895da867f0c76fd45c4d3d8998a8cb9b70ea56e32087f9f78cfd13e5.json";
 
@@ -688,66 +690,6 @@ fn main() {
 
 }
 
-
-
-// This main fuction is for testing things and seeing sigantues, pubkeys, and transactions
-// fn main() {
-//     // The file containing the JSON representation of the transaction.
-//     let filename = "../mempool/02c2897472e47228381f399d5303d9f64e91348e78ec0fd8f2da5835cf2cd303.json";
-//
-//     // Deserialize the transaction from the file.
-//     let mut transaction = deserialize_tx(filename);
-//
-//
-//     let scriptsig = transaction.vin[0].scriptsig.clone();
-//     let (signature, pubkey) = get_signature_and_publickey_from_scriptsig(&scriptsig).unwrap();
-//     println!("Signature: {}", signature);
-//     let signature = &signature[..signature.len()-2];
-//     println!("ScriptSig: {}", scriptsig);
-//     println!("Signature without sighash_type: {}", signature);
-//     println!("Pubkey: {}", pubkey);
-//
-//
-//
-//     let message_tx = get_tx_readyfor_signing_legacy(&mut transaction);
-//     let serialized_tx_for_message = serialize_tx(&message_tx);
-//     println!();
-//     println!("Transaction JSON for signing: {:#?}", message_tx);
-//
-//     println!();
-//     println!("Serialized for signing TX: {}", serialized_tx_for_message);
-//     println!();
-//     let message_tx_bytes = hex::decode(serialized_tx_for_message).expect("Failed to decode hex string");
-//     let hash_array: [u8; 32] = double_sha256(message_tx_bytes);
-//
-//
-//
-//     let secp = Secp256k1::new();
-//
-//     // Creating a message, public key and signature
-//
-//
-//     let sig_bytes = hex::decode(&signature).unwrap();
-//     let pubkey_bytes = hex::decode(&pubkey).unwrap();
-//
-//
-//     let message_result = Message::from_digest_slice(&hash_array).unwrap();
-//     let public_key =  PublicKey::from_slice(&pubkey_bytes).expect("Failed to create public key");
-//     let signature = Signature::from_der(&sig_bytes).unwrap();
-//
-//
-//
-//     // Return Ok(true) if the signature is valid, Ok(false) if it's invalid
-//     match secp.verify_ecdsa(&message_result, &signature,  &public_key) {
-//         Ok(_) => {
-//             println!("The signature is valid");
-//         },
-//         Err(e) => {
-//             println!("The signature is invalid: {}", e);
-//         },
-//     }
-//
-// }
 
 
 
