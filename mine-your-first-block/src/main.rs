@@ -157,6 +157,57 @@ fn block_header(valid_tx_vec: Vec<(String, u64)>, coinbase_tx: String) -> BlockH
     block_header
 }
 
+fn get_merkle_root(txids: Vec<String>) -> String {
+    // In natural byte order
+
+    // Need to hash all txids in the block until i get one merkle root
+    // if valid txs is odd duplicate the last one and hash it with itself
+    let mut merkle_root = String::new();
+    let mut merkle_tree = txids.clone();
+
+    // If the number of txs is odd, duplicate the last tx and hash it with itself
+    if merkle_tree.len() % 2 != 0 {
+        let last_tx = merkle_tree.last().unwrap().clone();
+        merkle_tree.push(last_tx);
+    }
+
+
+    // I need to Loop through the merkle tree and hash each pair of txids
+    // First i must concantenate the two txids (in order) and they must be 512 bits becasue each tx is 256 bits
+    // double sha256 is used to hash
+
+    while merkle_tree.len() > 1 {
+        let mut temp_merkle_tree = Vec::new();
+        // Does this for loop work?
+        for i in (0..merkle_tree.len()).step_by(2) {
+            let txid0 = &merkle_tree[i];
+            let txid1 = if i+1 < merkle_tree.len() {
+                &merkle_tree[i+1]
+            } else {
+                // This is a catch statement for when the number of txs is odd
+                // It shouldnt be though because I duplicated the last txid
+                &merkle_tree[i]
+            };
+
+            let concatenated_txids = format!("{}{}", txid0, txid1);
+            let merkle_hash = double_sha256(concatenated_txids.as_bytes().to_vec());
+            let merkle_hash_hex = hex::encode(merkle_hash);
+
+            temp_merkle_tree.push(merkle_hash_hex);
+        }
+        merkle_tree = temp_merkle_tree;
+    }
+    if let Some(merkle_root) = merkle_tree.first() {
+        if merkle_root.len() != 64 {
+            panic!("Merkle root is over 32 bytes");
+        } else {
+            merkle_root.clone()
+        }
+    } else {
+        panic!("Merkle root is empty");
+    }
+}
+
 // TODO
 // Need to get my head together and figure out how to simplify and verify the .json transactions. After
 // that i need to write a mining algo to efficiently fit the transactions with the highest fees into a block
