@@ -81,7 +81,17 @@ struct BlockHeader {
 // commitment in the ScriptPubKey of one of the outputs in the transaction.
 
 // This function will create a coinbase transaction
-fn create_coinbase_tx (total_tx_fee: u64) -> String {
+
+// TODO need to return a Transaction struct becasue this is bad practice and inefficient
+fn create_coinbase_tx(total_tx_fee: u64) -> String {
+    let coinbase_tx = Transaction {
+        version: 0,
+        locktime: 0,
+        vin: vec![],
+        vout: vec![],
+        sighash: None,
+    };
+    
     // Hard coding the current block height I see on mempool.space and current block reward
     let block_height: u32 = 837122;
     let block_height_bytes = block_height.to_le_bytes();
@@ -837,12 +847,12 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<(String, u64)>> {
                 match p2pkh_script_validation(&mut transaction) {
                     Ok(is_valid) => {
                         if !is_valid {
-                            eprintln!("Transaction is not valid: {:?}", path);
+                            //eprintln!("Transaction is not valid: {:?}", path);
                             continue;
                         }
                     },
                     Err(e) => {
-                        eprintln!("An error occured, failed to validate transaction: {:?}", e);
+                        //eprintln!("An error occured, failed to validate transaction: {:?}", e);
                         continue;
                     }
                 }
@@ -850,10 +860,10 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<(String, u64)>> {
                 // Get the fee if valid so  i can add it to my vec
                 let fee = verify_tx_fee(&transaction);
                 if fee < 0 {
-                    eprintln!("Transaction has a negative fee: {:?}", path);
+                    //eprintln!("Transaction has a negative fee: {:?}", path);
                     continue;
                 } else if fee < 1000 {
-                    eprintln!("Transaction has a fee below 1000 satoshis: {:?}", path);
+                    //eprintln!("Transaction has a fee below 1000 satoshis: {:?}", path);
                     continue;
                 }
 
@@ -865,7 +875,7 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<(String, u64)>> {
                 println!("Transaction is valid for txid: {}", transaction.vin[0].txid);
                 valid_txs.push((transaction.vin[0].txid.clone(), fee));
             }else {
-                eprintln!("Failed to convert path to string: {:?}", path);
+                //eprintln!("Failed to convert path to string: {:?}", path);
             }
         }
     }
@@ -874,11 +884,16 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<(String, u64)>> {
 
 /// This function will convert the valid txs into a vec of txids
 ///  Should i implement a check for the fee here? or how do i decide which txs to put in the block
-fn valid_txs_to_vec(valid_txs: Vec<(String, u64)>) -> Vec<String> {
-    let mut txids:Vec<String> = Vec::new();
-    for (txid, _) in valid_txs {
-        txids.push(txid);
-    }
+fn valid_txs_to_vec(mut valid_txs: Vec<(String, u64)>) -> Vec<String> {
+    // Unsure if this will be useful but I want to organize the txs by fee
+
+    // The sort by function will sort the txs by fee in descending order
+    valid_txs.sort_by(|a, b| b.1.cmp(&a.1));
+
+    // Now extract txids but I'm unsure if i should extract the fee as well..
+    //  WIll come back to
+    let txids:Vec<String> = valid_txs.iter().map(|(txid, _)| txid.clone()).collect();
+
     txids
 }
 
@@ -890,7 +905,14 @@ fn calculate_hash(block_header: &str) -> String {
 }
 
 fn hash_meets_difficulty_target(hash: &str) -> bool {
+    let mut target_met = false;
     // if target is below the hash return true
+    // I didn't know i could compare hex strings like this!
+    let target = "0000ffff00000000000000000000000000000000000000000000000000000000";
+    if hash < target {
+        target_met = true;
+    }
+    target_met
 }
 
 /// This function will generate the output file
@@ -902,23 +924,22 @@ fn generate_output_file(block_header: &str, coinbase_tx: String, txids_vec: &Vec
     std::fs::write(file, "")?;
 
     // FOrmatting the block header
-    let header_border = "+------------------------------------------------------------------+";
-    append_to_file(file, header_border)?;
+    
     let block_header = format!("|{:^66}|", block_header);
     append_to_file(file, &block_header)?;
-    append_to_file(file, header_border)?;
+    
 
     // Formatting the coinbase transaction
     let coinbase_tx = format!("|{:^66}|", coinbase_tx);
     append_to_file(file, &coinbase_tx)?;
-    append_to_file(file, header_border)?;
+    
 
     // Formatting the txids
     for txids in txids_vec {
         let txid = format!("|{:^66}|", txids);
         append_to_file(file, &txid)?;
     }
-    append_to_file(file, header_border)?;
+    
 
     Ok(())
 }
@@ -926,39 +947,53 @@ fn generate_output_file(block_header: &str, coinbase_tx: String, txids_vec: &Vec
 
 fn main() {
     let mempool_path = "../mempool";
-    match process_mempool(mempool_path) {
-        Ok(valid_transactions) => {
-            for (txid, fee) in valid_transactions {
-                println!("Transaction ID: {}, Fee: {}", txid, fee);
-            }
-        },
-        // Err(e) => eprintln!("An error occurred while processing the mempool: {}", e),
-        _ => todo!(),
-    }
-}
-
-fn main2() {
+    
+    // Initialize nonce value;
     let mut nonce = 0u32;
-    // valid_txs pulls from the process_mempool function and returns a vec of valid txids
-    let valid_txs = valid_txs_to_vec(process_mempool("../mempool").unwrap());
+    
+    // Get fees
+    let mut fees = 0u64;
+    
+    // Get the valid txs from the mempool
+    let valid_tx = process_mempool(mempool_path).unwrap();
+    
+    // Convert the valid txs into a vec of txids
+    let valid_txids = valid_txs_to_vec(valid_tx);
+    
+    // Start Mining!
     loop {
-        // function to construct  block header
-        let block_header = construct_block_header(valid_txs.clone(), nonce);
-        // function to calculate the hash of the block header
-        let hash = calculate_hash(&block_header);
-
-        // function to check if the hash meets the difficulty target
+        // Get the block header and serialize it
+        let block_header = construct_block_header(valid_txids.clone(), nonce);
+        let serialized_block_header = serialize_block_header(&block_header);
+        
+        // Calculate the hash of the block header
+        let hash = calculate_hash(&serialized_block_header);
+        
+        // Check if the hash meets the target
         if hash_meets_difficulty_target(&hash) {
-            println!("Found valid nonce: {}", nonce);
+            
+            // Generate coinbase tx
+            // right now i hardcoded the coinbase tx I need to change this but for now this works.
+            let coinbase_tx = create_coinbase_tx(fees);
+            //let serialized_coinbase_tx = serialize_tx(&coinbase_tx);
+            
+            // Write the block header, coinbase tx, and txids to the output file
+            append_to_file("../output.txt", &serialized_block_header).unwrap();
+            append_to_file("../output.txt", &coinbase_tx).unwrap();
+            
+            for txid in &valid_txids {
+                append_to_file("../output.txt", txid).unwrap();
+            }
             break;
         }
-
         nonce = nonce.wrapping_add(1);
+        
         if nonce == 0 {
-            println!("Exhausted all nonces without finding a valid one");
+            println!("Exhausted all nonce. None were valid.");
             break;
         }
     }
 }
+
 
 
