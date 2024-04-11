@@ -11,6 +11,7 @@ use std::io::{self, Read, read_to_string, Write};
 use ripemd::Ripemd160;
 // use ripemd::{Digest as RipemdDigest, Ripemd160};
 use std::fs::OpenOptions;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 
 // Unsure if i need to use the extern crate for secp256k1
@@ -20,6 +21,7 @@ use std::error::Error;
 use std::fs;
 use secp256k1::ecdsa::Signature;
 use sha2::digest::core_api::Block;
+
 
 
 // Transaction struct that may be overcomplicated right now. We will see
@@ -67,7 +69,7 @@ struct BlockHeader {
     prev_block_hash: String,
     merkle_root: String,
     timestamp: u32,
-    bits: u32,
+    bits: String,
     nonce: u32
 }
 
@@ -126,13 +128,14 @@ fn create_coinbase_tx (total_tx_fee: u64) -> String {
     serialized_coinbase_tx
 }
 
-fn block_header(valid_tx_vec: Vec<(String, u64)>, coinbase_tx: String) -> BlockHeader {
+fn construct_block_header(valid_tx_vec: Vec<String>, nonce: u32) -> BlockHeader {
+
     let mut block_header = BlockHeader{
         version: 0,
         prev_block_hash: "".to_string(),
         merkle_root: "".to_string(),
         timestamp: 0,
-        bits: 0,
+        bits: String::new(),
         nonce: 0,
     };
     // The default block version using a BIP 9 bit field is 0b00100000000000000000000000000000.
@@ -148,13 +151,72 @@ fn block_header(valid_tx_vec: Vec<(String, u64)>, coinbase_tx: String) -> BlockH
     block_header.prev_block_hash = prev_block_hash.to_string();
 
     // Left off on merkle root!!  Lets go!
+    // Need to get the txids from the valid txs vec But this is just a placeholder for now
+    let txids: Vec<String> = valid_tx_vec.iter().map(|txid| txid.clone()).collect();
+    let merkle_root = get_merkle_root(txids);
+    block_header.merkle_root = merkle_root;
 
+    // The time the block was constructed in unix time
+    // 4 bytes little endian
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let timestamp_bytes = timestamp.to_le_bytes();
+    let timestamp_hex = hex::encode(timestamp_bytes);
+    block_header.timestamp = timestamp_hex.parse().unwrap();
 
+    // Bits
+    // The target is a 256 bit number that the header hash must be less than or equal to in
+    // order for the block to be valid
+    // Our target is 0000ffff00000000000000000000000000000000000000000000000000000000
+    //The basic format of the bits field is:
+    // The last 3 bytes contain the rough precision of the full target.
+    // The first byte indicates "how many bytes to the left" those 3 bytes sit in a full 32-byte field.
+    let target ="0000ffff00000000000000000000000000000000000000000000000000000000";
+    let significant_bytes = &target[0..6]; // is this 00ffff or 0000ff CHeCK
+    let shifted_left_bytes = (target.len() / 2) - (significant_bytes.len() / 2); // 32 - 3 = 29
+    let bits = format!("{:02x}{}", shifted_left_bytes, significant_bytes);
+    // Should the bits be a string or an integer?
+    block_header.bits = bits;
 
-
-
+    // Nonce
+    // 4 byte little endian unsigned integer
+    // I guess start nonce at 0 and increment until the block hash is less than the target
+    block_header.nonce = nonce; // pass in a nonce from main
 
     block_header
+}
+
+// Serialize block header
+fn serialize_block_header(block_header: &BlockHeader) -> String {
+    let mut serialized_bh = String::new();
+
+    // Not sure if this function is nessesary but i don't want to also serialize the block header
+    // in the block_header function and i need to pass in multiple nonces anways
+
+    // Version 4 bytes lil endian
+    let version = hex::decode(&block_header.version).unwrap();
+    serialized_bh.push_str(&hex::encode(version));
+
+    // Previous Block natural byte order 32 bytes
+    serialized_bh.push_str(&block_header.prev_block_hash);
+
+    // Merkle root natural byte order 32 bytes
+    serialized_bh.push_str(&block_header.merkle_root);
+
+    // Timestamp 4 bytes lil endian
+    let timestamp = hex::decode(&block_header.timestamp).unwrap();
+    serialized_bh.push_str(&hex::encode(timestamp));
+
+    // Bits 4 bytes
+    serialized_bh.push_str(&block_header.bits);
+
+    // Nonce bytes lil endian
+    let nonce = block_header.nonce.to_le_bytes();
+    serialized_bh.push_str(&hex::encode(nonce));
+
+    serialized_bh
 }
 
 fn get_merkle_root(txids: Vec<String>) -> String {
@@ -176,16 +238,20 @@ fn get_merkle_root(txids: Vec<String>) -> String {
     // First i must concantenate the two txids (in order) and they must be 512 bits becasue each tx is 256 bits
     // double sha256 is used to hash
 
+    // While the merkle tree has more than one txid
     while merkle_tree.len() > 1 {
         let mut temp_merkle_tree = Vec::new();
-        // Does this for loop work?
+
+        // For each pair of txids in the merkle tree
+        // Hash them together and push the hash to the temp merkle tree
+        // Then once there is the merkle root left, return it as
         for i in (0..merkle_tree.len()).step_by(2) {
             let txid0 = &merkle_tree[i];
             let txid1 = if i+1 < merkle_tree.len() {
                 &merkle_tree[i+1]
             } else {
                 // This is a catch statement for when the number of txs is odd
-                // It shouldnt be though because I duplicated the last txid
+                // It shouldn't be though because I duplicated the last txid
                 &merkle_tree[i]
             };
 
@@ -197,6 +263,7 @@ fn get_merkle_root(txids: Vec<String>) -> String {
         }
         merkle_tree = temp_merkle_tree;
     }
+    // If the merkle tree has one txid left, return it as the merkle root
     if let Some(merkle_root) = merkle_tree.first() {
         if merkle_root.len() != 64 {
             panic!("Merkle root is over 32 bytes");
@@ -805,6 +872,26 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<(String, u64)>> {
     Ok(valid_txs)
 }
 
+/// This function will convert the valid txs into a vec of txids
+///  Should i implement a check for the fee here? or how do i decide which txs to put in the block
+fn valid_txs_to_vec(valid_txs: Vec<(String, u64)>) -> Vec<String> {
+    let mut txids:Vec<String> = Vec::new();
+    for (txid, _) in valid_txs {
+        txids.push(txid);
+    }
+    txids
+}
+
+/// This function will calculate the hash of the block header!!!
+// Test this fn next
+fn calculate_hash(block_header: &str) -> String {
+    let hash = double_sha256(block_header.as_bytes().to_vec());
+    hex::encode(hash)
+}
+
+fn hash_meets_difficulty_target(hash: &str) -> bool {
+    // if target is below the hash return true
+}
 
 /// This function will generate the output file
 // May remove the formatting
@@ -850,5 +937,28 @@ fn main() {
     }
 }
 
+fn main2() {
+    let mut nonce = 0u32;
+    // valid_txs pulls from the process_mempool function and returns a vec of valid txids
+    let valid_txs = valid_txs_to_vec(process_mempool("../mempool").unwrap());
+    loop {
+        // function to construct  block header
+        let block_header = construct_block_header(valid_txs.clone(), nonce);
+        // function to calculate the hash of the block header
+        let hash = calculate_hash(&block_header);
+
+        // function to check if the hash meets the difficulty target
+        if hash_meets_difficulty_target(&hash) {
+            println!("Found valid nonce: {}", nonce);
+            break;
+        }
+
+        nonce = nonce.wrapping_add(1);
+        if nonce == 0 {
+            println!("Exhausted all nonces without finding a valid one");
+            break;
+        }
+    }
+}
 
 
