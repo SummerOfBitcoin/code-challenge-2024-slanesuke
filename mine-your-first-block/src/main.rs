@@ -83,59 +83,60 @@ struct BlockHeader {
 // This function will create a coinbase transaction
 
 // TODO need to return a Transaction struct becasue this is bad practice and inefficient
-fn create_coinbase_tx(total_tx_fee: u64) -> String {
-    let coinbase_tx = Transaction {
+fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
+    let mut coinbase_tx = Transaction {
         version: 0,
         locktime: 0,
         vin: vec![],
         vout: vec![],
         sighash: None,
     };
-    
-    // Hard coding the current block height I see on mempool.space and current block reward
+
     let block_height: u32 = 837122;
     let block_height_bytes = block_height.to_le_bytes();
     let block_height_hex = hex::encode(block_height_bytes);
 
+    let block_substidy_plus_fees: u64 = 625000000 + total_tx_fee;
 
-    let block_sub_plus_fees: u64 = 625000000 + total_tx_fee; // Block reward in satoshis
-    let block_reward_bytes = block_sub_plus_fees.to_le_bytes();
-    let block_reward_hex = hex::encode(block_reward_bytes);
+    //let address = "36tvL5nHzSffbx4v9UhBfyGLWAkBUKyoxn".to_string();
+    let address_hex =  "053918f36132b92f65c11de2deeccf2f0b35177df3297ed5db".to_string();
 
-    // adding an address to pay the block reward to
-    let address = String::from("36tvL5nHzSffbx4v9UhBfyGLWAkBUKyoxn");
-    // Same address converted to hex for serialization
-    let address = "053918f36132b92f65c11de2deeccf2f0b35177df3297ed5db".to_string();
+    let extra_nonce_hex = hex::encode("SlanesukeSOBIntern2024".as_bytes());
 
-
-    let extra_nonce = String::from("SlanesukeSOBIntern2024");
-    let extra_nonce_hex = hex::encode(extra_nonce.as_bytes());
-
-    // Adding the block height and extra nonce to the coinbase input scriptSig
-    // the block height is in little endian byte order then encoding in hex
     let block_scriptsig = format!("{}{}", block_height_hex, extra_nonce_hex);
 
+    // version is 4 bytes lil endian 01000000
+    coinbase_tx.version = 1;
 
+    let txid= "0000000000000000000000000000000000000000000000000000000000000000";
+    // input count is 1 byte 01
+    coinbase_tx.vin.push(Vin {
+        txid: txid.to_string(),
+        vout: 0xffffffff,
+        prevout: Prevout {
+            scriptpubkey: "".to_string(),
+            scriptpubkey_asm: "".to_string(),
+            scriptpubkey_type: "".to_string(),
+            scriptpubkey_address: "".to_string(),
+            value: 0,
+        },
+        scriptsig: block_scriptsig,
+        scriptsig_asm: "".to_string(),
+        witness: None,
+        is_coinbase: true,
+        sequence: 0xffffffff,
+    });
 
-    // Finish manually serializing the coinbase tx.
-    // Left off concantingating the scriptPubKey SIze
-    // The address might need to be in hex
-    let version = "01000000".to_string();
-    let input_count = "01".to_string();
-    let txid = "0000000000000000000000000000000000000000000000000000000000000000";
-    let vout = "ffffffff";
-    let scriptsig_size = format!("{:02x}", block_scriptsig.len()/2);
-    let sequence = "ffffffff";
-    let output_count = "01".to_string();
-    let scriptpubkey_size = format!("{:02x}", address.len()/2);
-    let locktime = "00000000";
+    // Output count is 1 byte 01
+    coinbase_tx.vout.push(Vout {
+        scriptpubkey: address_hex,
+        scriptpubkey_asm: "".to_string(),
+        scriptpubkey_type: "".to_string(),
+        scriptpubkey_address: None,
+        value: block_substidy_plus_fees,
+    });
 
-
-    let serialized_coinbase_tx = format!("{}{}{}{}{}{}{}{}{}{}{}{}", version, input_count, txid,
-                                         vout, scriptsig_size, block_scriptsig, sequence, output_count, block_reward_hex, scriptpubkey_size,
-                                         address, locktime);
-
-    serialized_coinbase_tx
+    coinbase_tx
 }
 
 fn construct_block_header(valid_tx_vec: Vec<String>, nonce: u32) -> BlockHeader {
@@ -168,13 +169,19 @@ fn construct_block_header(valid_tx_vec: Vec<String>, nonce: u32) -> BlockHeader 
 
     // The time the block was constructed in unix time
     // 4 bytes little endian
+    // let timestamp = SystemTime::now()
+    //     .duration_since(UNIX_EPOCH)
+    //     .unwrap()
+    //     .as_secs();
+    // let timestamp_bytes = timestamp.to_le_bytes();
+    // let timestamp_hex = hex::encode(timestamp_bytes);
+    // block_header.timestamp = timestamp_hex.parse().unwrap();
+
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    let timestamp_bytes = timestamp.to_le_bytes();
-    let timestamp_hex = hex::encode(timestamp_bytes);
-    block_header.timestamp = timestamp_hex.parse().unwrap();
+    block_header.timestamp = timestamp as u32;
 
     // Bits
     // The target is a 256 bit number that the header hash must be less than or equal to in
@@ -206,8 +213,9 @@ fn serialize_block_header(block_header: &BlockHeader) -> String {
     // in the block_header function and i need to pass in multiple nonces anways
 
     // Version 4 bytes lil endian
-    let version = hex::decode(&block_header.version).unwrap();
-    serialized_bh.push_str(&hex::encode(version));
+    let version = block_header.version.to_le_bytes();
+    let version_hex =hex::encode(version);
+    serialized_bh.push_str(&version_hex);
 
     // Previous Block natural byte order 32 bytes
     serialized_bh.push_str(&block_header.prev_block_hash);
@@ -216,8 +224,9 @@ fn serialize_block_header(block_header: &BlockHeader) -> String {
     serialized_bh.push_str(&block_header.merkle_root);
 
     // Timestamp 4 bytes lil endian
-    let timestamp = hex::decode(&block_header.timestamp).unwrap();
-    serialized_bh.push_str(&hex::encode(timestamp));
+    let timestamp_bytes = block_header.timestamp.to_le_bytes();
+    let timestamp_hex = hex::encode(timestamp_bytes);
+    serialized_bh.push_str(&hex::encode(timestamp_hex));
 
     // Bits 4 bytes
     serialized_bh.push_str(&block_header.bits);
@@ -884,17 +893,13 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<(String, u64)>> {
 
 /// This function will convert the valid txs into a vec of txids
 ///  Should i implement a check for the fee here? or how do i decide which txs to put in the block
-fn valid_txs_to_vec(mut valid_txs: Vec<(String, u64)>) -> Vec<String> {
+fn valid_txs_to_vec(mut valid_txs: Vec<(String, u64)>) -> Vec<(String, u64)> {
     // Unsure if this will be useful but I want to organize the txs by fee
 
     // The sort by function will sort the txs by fee in descending order
     valid_txs.sort_by(|a, b| b.1.cmp(&a.1));
 
-    // Now extract txids but I'm unsure if i should extract the fee as well..
-    //  WIll come back to
-    let txids:Vec<String> = valid_txs.iter().map(|(txid, _)| txid.clone()).collect();
-
-    txids
+    valid_txs
 }
 
 /// This function will calculate the hash of the block header!!!
@@ -946,53 +951,79 @@ fn generate_output_file(block_header: &str, coinbase_tx: String, txids_vec: &Vec
 
 
 fn main() {
+    // Clear output filee
+    std::fs::write("../output.txt", "").unwrap();
+
     let mempool_path = "../mempool";
-    
+
     // Initialize nonce value;
     let mut nonce = 0u32;
-    
+
     // Get fees
     let mut fees = 0u64;
-    
+
     // Get the valid txs from the mempool
     let valid_tx = process_mempool(mempool_path).unwrap();
-    
+
     // Convert the valid txs into a vec of txids
-    let valid_txids = valid_txs_to_vec(valid_tx);
-    
+    let valid_txs = valid_txs_to_vec(valid_tx);
+
+    let mut valid_txids: Vec<String> = Vec::new();
+    let mut fees: Vec<u64> = Vec::new();
+
+    for (txid, fee) in valid_txs {
+        valid_txids.push(txid);
+        fees.push(fee);
+    }
+
+    let total_fees: u64 = fees.iter().sum();
+    /////////////////////////////////////////////////////////////
+
+
+
     // Start Mining!
     loop {
         // Get the block header and serialize it
         let block_header = construct_block_header(valid_txids.clone(), nonce);
         let serialized_block_header = serialize_block_header(&block_header);
-        
+
         // Calculate the hash of the block header
         let hash = calculate_hash(&serialized_block_header);
-        
+        println!("Nonce {}, Hash{}", nonce, hash);
+
         // Check if the hash meets the target
         if hash_meets_difficulty_target(&hash) {
-            
+
             // Generate coinbase tx
-            // right now i hardcoded the coinbase tx I need to change this but for now this works.
-            let coinbase_tx = create_coinbase_tx(fees);
-            //let serialized_coinbase_tx = serialize_tx(&coinbase_tx);
-            
+            let coinbase_tx = create_coinbase_tx(total_fees);
+            let serialized_cb_tx = serialize_tx(&coinbase_tx);
+
             // Write the block header, coinbase tx, and txids to the output file
             append_to_file("../output.txt", &serialized_block_header).unwrap();
-            append_to_file("../output.txt", &coinbase_tx).unwrap();
-            
+            append_to_file("../output.txt", &serialized_cb_tx).unwrap();
+
+            // Insert the coinbase txid at the beginning of the valid_txids vector
+            // Hard  coded the coinbase txid just to test. NEED TO CHANGE
+            valid_txids.insert(0, "0000000000000000000000000000000000000000000000000000000000000000".to_string());
+
             for txid in &valid_txids {
                 append_to_file("../output.txt", txid).unwrap();
             }
             break;
         }
-        nonce = nonce.wrapping_add(1);
-        
+        nonce += 1;
+
         if nonce == 0 {
             println!("Exhausted all nonce. None were valid.");
             break;
         }
     }
+}
+
+fn main2() {
+    let coinbase_tx  = create_coinbase_tx(0);
+    let serialized_coinbase_tx = serialize_tx(&coinbase_tx);
+    println!("{}", serialized_coinbase_tx);
 }
 
 
