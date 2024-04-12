@@ -2,12 +2,12 @@
 /// FIGURE OUT HOW TO VERIFY THE SIGNATURE OF A TRANSACTION UGHH
 
 
-use std::fmt::{Debug, format};
+use std::fmt::{Debug};
 use serde::Deserialize;
 use serde_json;
 use sha2::{Digest as ShaDigest, Sha256};
 use std::fs::File;
-use std::io::{self, Read, read_to_string, Write};
+use std::io::{self, Read, Write};
 use ripemd::Ripemd160;
 // use ripemd::{Digest as RipemdDigest, Ripemd160};
 use std::fs::OpenOptions;
@@ -20,7 +20,6 @@ use secp256k1::{PublicKey, Secp256k1, Message};
 use std::error::Error;
 use std::fs;
 use secp256k1::ecdsa::Signature;
-use sha2::digest::core_api::Block;
 
 
 
@@ -32,6 +31,12 @@ struct Transaction {
     vin: Vec<Vin>,
     vout: Vec<Vout>,
     sighash: Option<String>,
+}
+
+struct TransactionForProcessing {
+    transaction: Transaction,
+    txid: String,
+    fee: u64,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -69,7 +74,7 @@ struct BlockHeader {
     prev_block_hash: String,
     merkle_root: String,
     timestamp: u32,
-    bits: String,
+    bits: u32,
     nonce: u32
 }
 
@@ -146,7 +151,7 @@ fn construct_block_header(valid_tx_vec: Vec<String>, nonce: u32) -> BlockHeader 
         prev_block_hash: "".to_string(),
         merkle_root: "".to_string(),
         timestamp: 0,
-        bits: String::new(),
+        bits:  0x1d00ffff,  // Hard coded 'bits' value
         nonce: 0,
     };
     // The default block version using a BIP 9 bit field is 0b00100000000000000000000000000000.
@@ -183,20 +188,6 @@ fn construct_block_header(valid_tx_vec: Vec<String>, nonce: u32) -> BlockHeader 
         .as_secs();
     block_header.timestamp = timestamp as u32;
 
-    // Bits
-    // The target is a 256 bit number that the header hash must be less than or equal to in
-    // order for the block to be valid
-    // Our target is 0000ffff00000000000000000000000000000000000000000000000000000000
-    //The basic format of the bits field is:
-    // The last 3 bytes contain the rough precision of the full target.
-    // The first byte indicates "how many bytes to the left" those 3 bytes sit in a full 32-byte field.
-    let target ="0000ffff00000000000000000000000000000000000000000000000000000000";
-    let significant_bytes = &target[0..6]; // is this 00ffff or 0000ff CHeCK
-    let shifted_left_bytes = (target.len() / 2) - (significant_bytes.len() / 2); // 32 - 3 = 29
-    let bits = format!("{:02x}{}", shifted_left_bytes, significant_bytes);
-    // Should the bits be a string or an integer?
-    block_header.bits = bits;
-
     // Nonce
     // 4 byte little endian unsigned integer
     // I guess start nonce at 0 and increment until the block hash is less than the target
@@ -206,34 +197,26 @@ fn construct_block_header(valid_tx_vec: Vec<String>, nonce: u32) -> BlockHeader 
 }
 
 // Serialize block header
-fn serialize_block_header(block_header: &BlockHeader) -> String {
-    let mut serialized_bh = String::new();
-
-    // Not sure if this function is nessesary but i don't want to also serialize the block header
-    // in the block_header function and i need to pass in multiple nonces anways
+fn serialize_block_header(block_header: &BlockHeader) -> Vec<u8> {
+    let mut serialized_bh = Vec::new();
 
     // Version 4 bytes lil endian
-    let version = block_header.version.to_le_bytes();
-    let version_hex =hex::encode(version);
-    serialized_bh.push_str(&version_hex);
+   serialized_bh.extend(&block_header.version.to_le_bytes());
 
     // Previous Block natural byte order 32 bytes
-    serialized_bh.push_str(&block_header.prev_block_hash);
+    serialized_bh.extend_from_slice(&hex::decode(&block_header.prev_block_hash).unwrap());
 
     // Merkle root natural byte order 32 bytes
-    serialized_bh.push_str(&block_header.merkle_root);
+    serialized_bh.extend_from_slice(&hex::decode(&block_header.merkle_root).unwrap());
 
     // Timestamp 4 bytes lil endian
-    let timestamp_bytes = block_header.timestamp.to_le_bytes();
-    let timestamp_hex = hex::encode(timestamp_bytes);
-    serialized_bh.push_str(&hex::encode(timestamp_hex));
+    serialized_bh.extend(&block_header.timestamp.to_le_bytes());
 
     // Bits 4 bytes
-    serialized_bh.push_str(&block_header.bits);
+    serialized_bh.extend(&block_header.bits.to_le_bytes());
 
     // Nonce bytes lil endian
-    let nonce = block_header.nonce.to_le_bytes();
-    serialized_bh.push_str(&hex::encode(nonce));
+    serialized_bh.extend(&block_header.nonce.to_le_bytes());
 
     serialized_bh
 }
@@ -243,7 +226,7 @@ fn get_merkle_root(txids: Vec<String>) -> String {
 
     // Need to hash all txids in the block until i get one merkle root
     // if valid txs is odd duplicate the last one and hash it with itself
-    let mut merkle_root = String::new();
+    // let _merkle_root = String::new();
     let mut merkle_tree = txids.clone();
 
     // If the number of txs is odd, duplicate the last tx and hash it with itself
@@ -528,7 +511,7 @@ fn serialized_segwit_tx(transaction: &Transaction) -> String {
 fn verify_signature(
     signature: Vec<u8>,
     pubkey: Vec<u8>,
-    mut serialized_tx: Vec<u8>) -> Result<bool, Box<dyn Error>> {
+    serialized_tx: Vec<u8>) -> Result<bool, Box<dyn Error>> {
 
     // Removing the sighash type from the signature
     let signature = &signature[..signature.len()-1];
@@ -547,7 +530,7 @@ fn verify_signature(
         Ok(_) => {
             Ok(true)
         },
-        Err(e) => {
+        Err(_e) => {
             Ok(false)
         },
     }
@@ -596,7 +579,7 @@ fn get_signature_and_publickey_from_scriptsig(scriptsig: &str) -> Result<(String
 fn get_tx_readyfor_signing_legacy(transaction : &mut Transaction) -> Transaction {
     // Get the signature and public key from the scriptsig
     let scriptsig = &transaction.vin[0].scriptsig;
-    let (signature, pubkey) = get_signature_and_publickey_from_scriptsig(scriptsig).unwrap();
+    let (signature, _pubkey) = get_signature_and_publickey_from_scriptsig(scriptsig).unwrap();
 
     // removing the scriptsig for each vin and adding the scriptpubkey to the scriptsig field
     for vin in transaction.vin.iter_mut() {
@@ -633,24 +616,6 @@ fn get_tx_readyfor_signing_legacy(transaction : &mut Transaction) -> Transaction
     }
 }
 
-// Check double spend
-fn check_double_spending(transaction: &Transaction, mempool: &Vec<Transaction>) -> bool {
-    // Loop through mempool
-    for tx in mempool {
-        // Loop through the vin of the transaction
-        for vin in &tx.vin {
-            // Loop through the vin of the mempool tx
-            for vin2 in &transaction.vin {
-                // If the txid and vout match return false
-                if vin.txid == vin2.txid && vin.vout == vin2.vout {
-                    return false; // DOuble spent!!
-                }
-            }
-        }
-    }
-    true
-}
-
 /// This function will validate a P2PKH transaction
 fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, String), Box<dyn Error>> {
 
@@ -683,7 +648,7 @@ fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Strin
 
         // Convert the serialized tx into bytes for the message
         let message_in_bytes = hex::decode(serialized_tx_for_message.clone())
-            .map_err(|e| format!("Failed to decode the hex string for input: {}", i))?;
+            .map_err(|_e| format!("Failed to decode the hex string for input: {}", i))?;
 
         let decoded_signature = hex::decode(signature).map_err(|e| format!("Failed to decode signature: {}", e))?;
         let decoded_pubkey = hex::decode(pubkey).map_err(|e| format!("Failed to decode pubkey: {}", e))?;
@@ -722,7 +687,7 @@ fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Strin
                     let stack_item1 = stack.pop().unwrap();
                     // unsure why but i diregard an extra item on the stack
                     // then it compares the top two items
-                    let stack_temp = stack.pop().unwrap();
+                    let _stack_temp = stack.pop().unwrap();
                     let stack_item2 = stack.pop().unwrap();
                     if stack_item1 != stack_item2 {
                         return Err(format!("Stackitem1: {} aND Stackitem 2: {} and Hash: {} .OP_EQUALVERIFY failed for input",hex::encode(stack_item1), hex::encode(stack_item2), i).into());
@@ -811,6 +776,24 @@ fn verify_tx_fee(transaction: &Transaction) -> u64 {
     total_input_amount - total_output_amount
 }
 
+// Check double spend
+fn check_double_spending(transaction: &Transaction, mempool: &Vec<TransactionForProcessing>) -> bool {
+    // Loop through mempool
+    for tx in mempool {
+        let tx = &tx.transaction;
+        // Loop through the vin of the transaction
+        for vin in &tx.vin {
+            // Loop through the vin of the mempool tx
+            for vin2 in &transaction.vin {
+                // If the txid and vout match return false
+                if vin.txid == vin2.txid && vin.vout == vin2.vout {
+                    return false; // DOuble spent!!
+                }
+            }
+        }
+    }
+    true
+}
 
 /// Hashing Functions
 // Takes in data and returns a ripemd160 hash
@@ -848,8 +831,8 @@ fn append_to_file(filename: &str, contents: &str) -> io::Result<()> {
 
 /// Combing through the meempool folder
 // Need to implement logic so that if it passes all these checks it will be added to a vec
-fn process_mempool(mempool_path: &str) -> io::Result<Vec<(String, u64)>> {
-    let mut valid_txs = Vec::new();
+fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProcessing>> {
+    let mut valid_txs: Vec<TransactionForProcessing> = Vec::new();
 
     for tx in fs::read_dir(mempool_path)? {
         let tx = tx?;
@@ -860,7 +843,7 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<(String, u64)>> {
 
                 let (is_valid, txid) = match p2pkh_script_validation(&mut transaction) {
                     Ok(result) => result,
-                    Err(e) => {
+                    Err(_e) => {
                         //eprintln!("An error occured, failed to validate transaction: {:?}", e);
                         continue;
                     }
@@ -884,11 +867,19 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<(String, u64)>> {
                 let min_relay_fee_per_byte: u64 = 3; // 3 satoshis per byte  could go up or down 1-5
                 remove_dust_transactions(&mut transaction, min_relay_fee_per_byte);
 
+                // Check for double spending
+                if !check_double_spending(&transaction, &valid_txs) {
+                    continue;
+                }
 
                 println!("Transaction is valid for txid: {}", txid);
 
                 // Push the txid and fee to the valid_txs vec
-                valid_txs.push((txid, fee));
+                valid_txs.push(TransactionForProcessing {
+                    transaction: transaction,
+                    txid: txid,
+                    fee: fee as u64,
+                });
             }else {
                 //eprintln!("Failed to convert path to string: {:?}", path);
             }
@@ -899,19 +890,21 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<(String, u64)>> {
 
 /// This function will convert the valid txs into a vec of txids
 ///  Should i implement a check for the fee here? or how do i decide which txs to put in the block
-fn valid_txs_to_vec(mut valid_txs: Vec<(String, u64)>) -> Vec<(String, u64)> {
-    // Unsure if this will be useful but I want to organize the txs by fee
+fn valid_txs_to_vec(valid_txs: Vec<TransactionForProcessing>) -> Vec<(String, u64)> {
+    let mut txid_fee_pair: Vec<_> = valid_txs.into_iter().map(|tx_meta| (tx_meta.txid, tx_meta.fee)).collect();
 
-    // The sort by function will sort the txs by fee in descending order
-    valid_txs.sort_by(|a, b| b.1.cmp(&a.1));
+    // Sort in decending order
+    txid_fee_pair.sort_by(|a, b| b.1.cmp(&a.1));
 
-    valid_txs
+    // return
+    txid_fee_pair
 }
+
 
 /// This function will calculate the hash of the block header!!!
 // Test this fn next
-fn calculate_hash(block_header: &str) -> String {
-    let hash = double_sha256(block_header.as_bytes().to_vec());
+fn calculate_hash(block_header: Vec<u8>) -> String {
+    let hash = double_sha256(block_header);
     hex::encode(hash)
 }
 
@@ -925,36 +918,6 @@ fn hash_meets_difficulty_target(hash: &str) -> bool {
     }
     target_met
 }
-
-/// This function will generate the output file
-// May remove the formatting
-fn generate_output_file(block_header: &str, coinbase_tx: String, txids_vec: &Vec<&str>)
-    -> io::Result<()> {
-    let file = "../output.txt";
-
-    std::fs::write(file, "")?;
-
-    // FOrmatting the block header
-    
-    let block_header = format!("|{:^66}|", block_header);
-    append_to_file(file, &block_header)?;
-    
-
-    // Formatting the coinbase transaction
-    let coinbase_tx = format!("|{:^66}|", coinbase_tx);
-    append_to_file(file, &coinbase_tx)?;
-    
-
-    // Formatting the txids
-    for txids in txids_vec {
-        let txid = format!("|{:^66}|", txids);
-        append_to_file(file, &txid)?;
-    }
-    
-
-    Ok(())
-}
-
 
 fn main() {
     // Clear output filee
@@ -990,15 +953,9 @@ fn main() {
         // Get the block header and serialize it
         let block_header = construct_block_header(valid_txids.clone(), nonce);
         let serialized_block_header = serialize_block_header(&block_header);
-        let hashed_block_header = double_sha256(serialized_block_header.clone().as_bytes().to_vec());
-
-        // Reverse byte order
-        let hashed_block_header: Vec<u8> = hashed_block_header.iter().rev().cloned().collect();
-        let hash_header = hex::encode(hashed_block_header);
-
 
         // Calculate the hash of the block header
-        let hash = calculate_hash(&serialized_block_header);
+        let hash = calculate_hash(serialized_block_header);
         println!("Nonce {}, Hash{}", nonce, hash);
 
         // Check if the hash meets the target
@@ -1009,7 +966,7 @@ fn main() {
             let serialized_cb_tx = serialize_tx(&coinbase_tx);
 
             // Write the block header, coinbase tx, and txids to the output file
-            append_to_file("../output.txt", &hash_header).unwrap();
+            append_to_file("../output.txt", &hash).unwrap();
             append_to_file("../output.txt", &serialized_cb_tx).unwrap();
 
             // Insert the coinbase txid at the beginning of the valid_txids vector
