@@ -12,6 +12,7 @@ use ripemd::Ripemd160;
 // use ripemd::{Digest as RipemdDigest, Ripemd160};
 use std::fs::OpenOptions;
 use std::time::{SystemTime, UNIX_EPOCH};
+use itertools::{Itertools, sorted};
 
 
 // Unsure if i need to use the extern crate for secp256k1
@@ -33,6 +34,7 @@ struct Transaction {
     sighash: Option<String>,
 }
 
+#[derive(Clone)]
 struct TransactionForProcessing {
     transaction: Transaction,
     txid: String,
@@ -855,13 +857,13 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProcessin
 
                 // Get the fee if valid so  i can add it to my vec
                 let fee = verify_tx_fee(&transaction);
-                if fee < 0 {
-                    //eprintln!("Transaction has a negative fee: {:?}", path);
-                    continue;
-                } else if fee < 1000 {
-                    //eprintln!("Transaction has a fee below 1000 satoshis: {:?}", path);
-                    continue;
-                }
+                // if fee < 0 {
+                //     //eprintln!("Transaction has a negative fee: {:?}", path);
+                //     continue;
+                // } else if fee < 1000 {
+                //     //eprintln!("Transaction has a fee below 1000 satoshis: {:?}", path);
+                //     continue;
+                // }
 
                 // Remove dust transactions
                 let min_relay_fee_per_byte: u64 = 3; // 3 satoshis per byte  could go up or down 1-5
@@ -919,6 +921,18 @@ fn hash_meets_difficulty_target(hash: &str) -> bool {
     target_met
 }
 
+fn  calculate_transaction_weight(tx: &Transaction)  ->  u64  {
+
+    let base_size = serialize_tx(tx).len() as u64;
+    // Don't need yet because i've only verified p2pkh tx's
+    let total_size = serialize_tx(tx).len() as u64;
+
+    // Calculate weight of the transaction
+    let tx_weight = base_size * 3 + total_size;
+
+    tx_weight
+}
+
 fn main() {
     // Clear output filee
     std::fs::write("../output.txt", "").unwrap();
@@ -929,24 +943,35 @@ fn main() {
     let mut nonce = 0u32;
 
     // Get the valid txs from the mempool
-    let valid_tx = process_mempool(mempool_path).unwrap();
+    let mut valid_tx = process_mempool(mempool_path).unwrap();
 
     // Convert the valid txs into a vec of txids
-    let valid_txs = valid_txs_to_vec(valid_tx);
+    //let valid_txs = valid_txs_to_vec(valid_tx);
 
+    // Calculate the total fees and get the txids
     let mut valid_txids: Vec<String> = Vec::new();
     let mut fees: Vec<u64> = Vec::new();
 
-    for (txid, fee) in valid_txs {
-        valid_txids.push(txid);
-        fees.push(fee);
+    // Initializing block weight
+    let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
+    let mut total_weight = 0u64;
+
+    let valid_tx_clone =  valid_tx.clone();
+
+    for tx in valid_tx_clone {
+        let tx_weight = calculate_transaction_weight(&tx.transaction);
+        if total_weight + tx_weight > 4000000 {
+            continue;
+        }
+        block_txs.push(tx.clone());
+        total_weight += tx_weight;
+        valid_txids.push(tx.txid.clone());
+        fees.push(tx.fee);
     }
-
     let total_fees: u64 = fees.iter().sum();
-    /////////////////////////////////////////////////////////////
 
-
-
+    // Sort the transactions in descending order based on the fee
+    let sorted_valid_tx: Vec<_> = valid_tx.iter().cloned().sorted_by(|a, b| b.fee.cmp(&a.fee)).collect();
 
     // Start Mining!
     loop {
@@ -965,13 +990,16 @@ fn main() {
             let coinbase_tx = create_coinbase_tx(total_fees);
             let serialized_cb_tx = serialize_tx(&coinbase_tx);
 
+            // coinbase txid
+            let coinbase_txid = double_sha256(serialized_cb_tx.as_bytes().to_vec());
+
             // Write the block header, coinbase tx, and txids to the output file
             append_to_file("../output.txt", &hash).unwrap();
             append_to_file("../output.txt", &serialized_cb_tx).unwrap();
 
             // Insert the coinbase txid at the beginning of the valid_txids vector
             // Hard  coded the coinbase txid just to test. NEED TO CHANGE
-            valid_txids.insert(0, "0000000000000000000000000000000000000000000000000000000000000000".to_string());
+            valid_txids.insert(0, hex::encode(coinbase_txid));
 
             for txid in &valid_txids {
                 append_to_file("../output.txt", txid).unwrap();
