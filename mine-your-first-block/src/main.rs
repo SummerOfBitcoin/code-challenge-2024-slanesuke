@@ -682,7 +682,7 @@ fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Strin
         serialized_tx_for_message = serialize_tx(&message_tx);
 
         // Convert the serialized tx into bytes for the message
-        let message_in_bytes = hex::decode(serialized_tx_for_message)
+        let message_in_bytes = hex::decode(serialized_tx_for_message.clone())
             .map_err(|e| format!("Failed to decode the hex string for input: {}", i))?;
 
         let decoded_signature = hex::decode(signature).map_err(|e| format!("Failed to decode signature: {}", e))?;
@@ -990,6 +990,10 @@ fn main() {
         // Get the block header and serialize it
         let block_header = construct_block_header(valid_txids.clone(), nonce);
         let serialized_block_header = serialize_block_header(&block_header);
+        let block_header = serialized_block_header.clone().as_bytes();
+        let hashed_block_header = double_sha256(block_header.to_vec());
+        let hash_header = hex::encode(hashed_block_header);
+
 
         // Calculate the hash of the block header
         let hash = calculate_hash(&serialized_block_header);
@@ -1003,7 +1007,7 @@ fn main() {
             let serialized_cb_tx = serialize_tx(&coinbase_tx);
 
             // Write the block header, coinbase tx, and txids to the output file
-            append_to_file("../output.txt", &serialized_block_header).unwrap();
+            append_to_file("../output.txt", &hash_header).unwrap();
             append_to_file("../output.txt", &serialized_cb_tx).unwrap();
 
             // Insert the coinbase txid at the beginning of the valid_txids vector
