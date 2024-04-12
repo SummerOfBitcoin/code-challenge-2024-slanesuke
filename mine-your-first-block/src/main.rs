@@ -3,11 +3,11 @@ use serde::Deserialize;
 use serde_json;
 use sha2::{Digest as ShaDigest, Sha256};
 use std::fs::File;
-use std::io::{self, Read, Write, BufReader};
+use std::io::{self, Write, BufReader};
 use ripemd::Ripemd160;
 use std::fs::OpenOptions;
 use std::time::{SystemTime, UNIX_EPOCH};
-use itertools::{Itertools, sorted};
+use itertools::Itertools;
 extern crate secp256k1;
 use secp256k1::{PublicKey, Secp256k1, Message};
 use std::error::Error;
@@ -126,6 +126,9 @@ fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
 
     coinbase_tx
 }
+
+// Output block header?
+//: 140000000000000000000000000205e5b86991b1b0a370fb7e2b7126d32de18e48e556c46d340c856df4b923159ec91c1a571f3668773bded468fc7bc45b9cc72cfff31977901966ffff001da00f0000
 
 fn construct_block_header(valid_tx_vec: Vec<String>, nonce: u32) -> BlockHeader {
 
@@ -252,7 +255,7 @@ fn get_merkle_root(txids: Vec<String>) -> String {
 
 fn deserialize_tx(filename: &str) -> Transaction {
     //  Open the file of a tx
-    let mut file = File::open(filename).unwrap();
+    let file = File::open(filename).unwrap();
 
     // let mut json_string = String::new();
     // file.read_to_string(& mut json_string).unwrap();
@@ -847,19 +850,6 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProcessin
     Ok(valid_txs)
 }
 
-/// This function will convert the valid txs into a vec of txids
-///  Should i implement a check for the fee here? or how do i decide which txs to put in the block
-fn valid_txs_to_vec(valid_txs: Vec<TransactionForProcessing>) -> Vec<(String, u64)> {
-    let mut txid_fee_pair: Vec<_> = valid_txs.into_iter().map(|tx_meta| (tx_meta.txid, tx_meta.fee)).collect();
-
-    // Sort in decending order
-    txid_fee_pair.sort_by(|a, b| b.1.cmp(&a.1));
-
-    // return
-    txid_fee_pair
-}
-
-
 /// This function will calculate the hash of the block header!!!
 // Test this fn next
 fn calculate_hash(block_header: Vec<u8>) -> String {
@@ -929,6 +919,8 @@ fn main() {
 
     // Sort the transactions in descending order based on the fee
     let sorted_valid_tx: Vec<_> = valid_tx.iter().cloned().sorted_by(|a, b| b.fee.cmp(&a.fee)).collect();
+    // Get txids from sorted valid txs
+    let sorted_txids : Vec<String> = sorted_valid_tx.iter().map(|tx| tx.txid.clone()).collect();
 
     // Start Mining!
     loop {
@@ -959,7 +951,7 @@ fn main() {
             // Hard  coded the coinbase txid just to test. NEED TO CHANGE
             valid_txids.insert(0, hex::encode(coinbase_txid));
 
-            for txid in &valid_txids {
+            for txid in &sorted_txids {
                 append_to_file("../output.txt", txid).unwrap();
             }
             break;
