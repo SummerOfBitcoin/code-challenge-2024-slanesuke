@@ -990,8 +990,7 @@ fn main() {
         // Get the block header and serialize it
         let block_header = construct_block_header(valid_txids.clone(), nonce);
         let serialized_block_header = serialize_block_header(&block_header);
-        let block_header = serialized_block_header.clone().as_bytes();
-        let hashed_block_header = double_sha256(block_header.to_vec());
+        let hashed_block_header = double_sha256(serialized_block_header.clone().as_bytes().to_vec());
 
         // Reverse byte order
         let hashed_block_header: Vec<u8> = hashed_block_header.iter().rev().cloned().collect();
