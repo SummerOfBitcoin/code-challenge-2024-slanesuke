@@ -877,7 +877,7 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProcessin
                     continue;
                 }
 
-                println!("Transaction is valid for txid: {}", txid);
+                //println!("Transaction is valid for txid: {}", txid);
 
                 // Push the txid and fee to the valid_txs vec
                 valid_txs.push(TransactionForProcessing {
@@ -984,7 +984,7 @@ fn main() {
 
         // Calculate the hash of the block header
         let hash = calculate_hash(serialized_block_header);
-        println!("Nonce {}, Hash{}", nonce, hash);
+        //println!("Nonce {}, Hash{}", nonce, hash);
 
         // Check if the hash meets the target
         if hash_meets_difficulty_target(&hash) {
