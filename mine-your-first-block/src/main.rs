@@ -652,10 +652,13 @@ fn check_double_spending(transaction: &Transaction, mempool: &Vec<Transaction>) 
 }
 
 /// This function will validate a P2PKH transaction
-fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<bool, Box<dyn Error>> {
+fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, String), Box<dyn Error>> {
 
     // Create a stack to hold the data
     let mut stack: Vec<Vec<u8>> = Vec::new();
+
+    // Initalize the serialized tx
+    let mut serialized_tx_for_message = String::new();
 
     for (i,vin) in transaction.vin.iter().enumerate() {
 
@@ -674,7 +677,9 @@ fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<bool, Box<dy
         let mut tx_for_signing = transaction.clone();
         tx_for_signing.vin = vec![vin.clone()];
         let message_tx = get_tx_readyfor_signing_legacy(&mut tx_for_signing);
-        let serialized_tx_for_message = serialize_tx(&message_tx);
+
+        // Update the serialized tx
+        serialized_tx_for_message = serialize_tx(&message_tx);
 
         // Convert the serialized tx into bytes for the message
         let message_in_bytes = hex::decode(serialized_tx_for_message)
@@ -772,7 +777,11 @@ fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<bool, Box<dy
         }
     }
 
-    Ok(true)
+    //////
+    let serialized_validtx = serialized_tx_for_message.as_bytes();
+    let txid: [u8; 32] = double_sha256(serialized_validtx.to_vec());
+
+    Ok((true, hex::encode(txid)))
 }
 
 /// This function will remove dust transactions from a transaction
@@ -848,23 +857,18 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<(String, u64)>> {
         if path.is_file() {
             if let Some(path_str) = path.to_str() {
                 let mut transaction = deserialize_tx(path_str);
-                // I can add this once i put all the valid tx's  in a vec
-                // if !check_double_spending(&transaction, Vec<>) {
-                //   continue;
-                // }
 
-                match p2pkh_script_validation(&mut transaction) {
-                    Ok(is_valid) => {
-                        if !is_valid {
-                            //eprintln!("Transaction is not valid: {:?}", path);
-                            continue;
-                        }
-                    },
+                let (is_valid, txid) = match p2pkh_script_validation(&mut transaction) {
+                    Ok(result) => result,
                     Err(e) => {
                         //eprintln!("An error occured, failed to validate transaction: {:?}", e);
                         continue;
                     }
+                };
+                if !is_valid {
+                    //eprintln!("Transaction is not valid: {:?}", path);
                 }
+
 
                 // Get the fee if valid so  i can add it to my vec
                 let fee = verify_tx_fee(&transaction);
@@ -881,8 +885,10 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<(String, u64)>> {
                 remove_dust_transactions(&mut transaction, min_relay_fee_per_byte);
 
 
-                println!("Transaction is valid for txid: {}", transaction.vin[0].txid);
-                valid_txs.push((transaction.vin[0].txid.clone(), fee));
+                println!("Transaction is valid for txid: {}", txid);
+
+                // Push the txid and fee to the valid_txs vec
+                valid_txs.push((txid, fee));
             }else {
                 //eprintln!("Failed to convert path to string: {:?}", path);
             }
@@ -959,9 +965,6 @@ fn main() {
     // Initialize nonce value;
     let mut nonce = 0u32;
 
-    // Get fees
-    let mut fees = 0u64;
-
     // Get the valid txs from the mempool
     let valid_tx = process_mempool(mempool_path).unwrap();
 
@@ -978,6 +981,7 @@ fn main() {
 
     let total_fees: u64 = fees.iter().sum();
     /////////////////////////////////////////////////////////////
+
 
 
 
@@ -1020,11 +1024,7 @@ fn main() {
     }
 }
 
-fn main2() {
-    let coinbase_tx  = create_coinbase_tx(0);
-    let serialized_coinbase_tx = serialize_tx(&coinbase_tx);
-    println!("{}", serialized_coinbase_tx);
-}
+
 
 
 
