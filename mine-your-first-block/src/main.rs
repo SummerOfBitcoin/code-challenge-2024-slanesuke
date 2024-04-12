@@ -7,7 +7,7 @@ use serde::Deserialize;
 use serde_json;
 use sha2::{Digest as ShaDigest, Sha256};
 use std::fs::File;
-use std::io::{self, Read, Write};
+use std::io::{self, Read, Write, BufReader};
 use ripemd::Ripemd160;
 // use ripemd::{Digest as RipemdDigest, Ripemd160};
 use std::fs::OpenOptions;
@@ -298,10 +298,13 @@ fn deserialize_tx(filename: &str) -> Transaction {
     //  Open the file of a tx
     let mut file = File::open(filename).unwrap();
 
-    let mut json_string = String::new();
-    file.read_to_string(& mut json_string).unwrap();
+    // let mut json_string = String::new();
+    // file.read_to_string(& mut json_string).unwrap();
+    //
+    // let tx: Transaction = serde_json::from_str(&json_string).unwrap();
 
-    let tx: Transaction = serde_json::from_str(&json_string).unwrap();
+    let reader = BufReader::new(file);
+    let tx: Transaction = serde_json::from_reader(reader).unwrap();
 
     // return a transaction if the deserialization is successful
     tx
