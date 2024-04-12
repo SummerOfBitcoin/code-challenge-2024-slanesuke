@@ -881,9 +881,6 @@ fn  calculate_transaction_weight(tx: &Transaction)  ->  u64  {
 }
 
 fn main() {
-    // Clear output filee
-    std::fs::write("../output.txt", "").unwrap();
-
     let mempool_path = "../mempool";
 
     // Initialize nonce value;
@@ -891,9 +888,6 @@ fn main() {
 
     // Get the valid txs from the mempool
     let mut valid_tx = process_mempool(mempool_path).unwrap();
-
-    // Convert the valid txs into a vec of txids
-    //let valid_txs = valid_txs_to_vec(valid_tx);
 
     // Calculate the total fees and get the txids
     let mut valid_txids: Vec<String> = Vec::new();
@@ -925,15 +919,15 @@ fn main() {
     // Start Mining!
     loop {
         // Get the block header and serialize it
-        let block_header = construct_block_header(valid_txids.clone(), nonce);
+        let block_header = construct_block_header(sorted_txids.clone(), nonce);
+
         let serialized_block_header = serialize_block_header(&block_header);
 
         // Calculate the hash of the block header
-        let hash = calculate_hash(serialized_block_header.clone());
-        //println!("Nonce {}, Hash{}", nonce, hash);
+        let block_hash = calculate_hash(serialized_block_header.clone());
 
         // Check if the hash meets the target
-        if hash_meets_difficulty_target(&hash) {
+        if hash_meets_difficulty_target(&block_hash) {
 
             // Generate coinbase tx
             let coinbase_tx = create_coinbase_tx(total_fees);
@@ -941,6 +935,9 @@ fn main() {
 
             // coinbase txid
             let coinbase_txid = double_sha256(serialized_cb_tx.as_bytes().to_vec());
+
+            // Clear the output file
+            fs::write("../output.txt", "").unwrap();
 
             // Write the block header, coinbase tx, and txids to the output file
             //append_to_file("../output.txt", &hash).unwrap();
@@ -955,12 +952,9 @@ fn main() {
                 append_to_file("../output.txt", txid).unwrap();
             }
             break;
+        } else {
+            nonce += 1;
         }
-        nonce += 1;
 
-        if nonce == 0 {
-            println!("Exhausted all nonce. None were valid.");
-            break;
-        }
     }
 }
