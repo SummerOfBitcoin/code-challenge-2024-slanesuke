@@ -1,7 +1,3 @@
-/// TODO
-/// FIGURE OUT HOW TO VERIFY THE SIGNATURE OF A TRANSACTION UGHH
-
-
 use std::fmt::{Debug};
 use serde::Deserialize;
 use serde_json;
@@ -9,20 +5,14 @@ use sha2::{Digest as ShaDigest, Sha256};
 use std::fs::File;
 use std::io::{self, Read, Write, BufReader};
 use ripemd::Ripemd160;
-// use ripemd::{Digest as RipemdDigest, Ripemd160};
 use std::fs::OpenOptions;
 use std::time::{SystemTime, UNIX_EPOCH};
 use itertools::{Itertools, sorted};
-
-
-// Unsure if i need to use the extern crate for secp256k1
 extern crate secp256k1;
 use secp256k1::{PublicKey, Secp256k1, Message};
 use std::error::Error;
 use std::fs;
 use secp256k1::ecdsa::Signature;
-
-
 
 // Transaction struct that may be overcomplicated right now. We will see
 #[derive(Debug, Deserialize, Clone)]
@@ -79,15 +69,6 @@ struct BlockHeader {
     bits: u32,
     nonce: u32
 }
-
-// TODO Before I turn it in
-// Implement the CoinbaseTx function! Need to add the serialized coinbase tx to output.txt
-// If the coinbase tx has a segwit tx according to BIP 141: all coinbase transactions since the segwit
-// upgrade need to include a witness reserved value in
-// the witness field for the input, and then use that along with a witness root hash to put a wTXID
-// commitment in the ScriptPubKey of one of the outputs in the transaction.
-
-// This function will create a coinbase transaction
 
 // TODO need to return a Transaction struct becasue this is bad practice and inefficient
 fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
@@ -173,16 +154,6 @@ fn construct_block_header(valid_tx_vec: Vec<String>, nonce: u32) -> BlockHeader 
     let txids: Vec<String> = valid_tx_vec.iter().map(|txid| txid.clone()).collect();
     let merkle_root = get_merkle_root(txids);
     block_header.merkle_root = merkle_root;
-
-    // The time the block was constructed in unix time
-    // 4 bytes little endian
-    // let timestamp = SystemTime::now()
-    //     .duration_since(UNIX_EPOCH)
-    //     .unwrap()
-    //     .as_secs();
-    // let timestamp_bytes = timestamp.to_le_bytes();
-    // let timestamp_hex = hex::encode(timestamp_bytes);
-    // block_header.timestamp = timestamp_hex.parse().unwrap();
 
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -279,21 +250,6 @@ fn get_merkle_root(txids: Vec<String>) -> String {
     }
 }
 
-// TODO
-// Need to get my head together and figure out how to simplify and verify the .json transactions. After
-// that i need to write a mining algo to efficiently fit the transactions with the highest fees into a block
-// and pass the block fees to coinbase tx so I can add it to the block reward.
-// Need to then just get there txid's and put them in a vec to add to output.txt
-
-// TODO
-// Implement the BlockHeader function! Need to add the serialized block header to output.txt
-
-
-
-
-
-
-// First just  working  with one tx so I can learn
 fn deserialize_tx(filename: &str) -> Transaction {
     //  Open the file of a tx
     let mut file = File::open(filename).unwrap();
@@ -506,8 +462,6 @@ fn serialized_segwit_tx(transaction: &Transaction) -> String {
     // if transaction.sighash.is_some() {
     //         serialized_tx.push_str(&<std::option::Option<std::string::String> as Clone>::clone(&transaction.sighash).unwrap());
     //     }
-
-
 
      serialized_tx
 }
@@ -881,8 +835,8 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProcessin
 
                 // Push the txid and fee to the valid_txs vec
                 valid_txs.push(TransactionForProcessing {
-                    transaction: transaction,
-                    txid: txid,
+                    transaction,
+                    txid,
                     fee: fee as u64,
                 });
             }else {
@@ -983,7 +937,7 @@ fn main() {
         let serialized_block_header = serialize_block_header(&block_header);
 
         // Calculate the hash of the block header
-        let hash = calculate_hash(serialized_block_header);
+        let hash = calculate_hash(serialized_block_header.clone());
         //println!("Nonce {}, Hash{}", nonce, hash);
 
         // Check if the hash meets the target
@@ -997,7 +951,8 @@ fn main() {
             let coinbase_txid = double_sha256(serialized_cb_tx.as_bytes().to_vec());
 
             // Write the block header, coinbase tx, and txids to the output file
-            append_to_file("../output.txt", &hash).unwrap();
+            //append_to_file("../output.txt", &hash).unwrap();
+            append_to_file("../output.txt", &hex::encode(serialized_block_header)).unwrap();
             append_to_file("../output.txt", &serialized_cb_tx).unwrap();
 
             // Insert the coinbase txid at the beginning of the valid_txids vector
@@ -1017,8 +972,3 @@ fn main() {
         }
     }
 }
-
-
-
-
-
