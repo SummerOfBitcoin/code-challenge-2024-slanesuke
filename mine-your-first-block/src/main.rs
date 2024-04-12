@@ -357,117 +357,117 @@ fn serialize_tx(transaction: &Transaction) -> String {
 }
 
 
-/// This function will serialize a segwit transaction into a string of hex bytes
-fn serialized_segwit_tx(transaction: &Transaction) -> String {
-    let mut serialized_tx = String::new();
-
-    let version = transaction.version.to_le_bytes();
-    serialized_tx.push_str(&hex::encode(version));
-
-    // In a segwit transaction I have to add a marker and a flag
-    // Marker is always 00 and flag is always 01
-    serialized_tx.push_str("00");
-    serialized_tx.push_str("01");
-
-    // Serialize vin count and push the numb of inputs
-    let vin_count = transaction.vin.len() as u64;
-    serialized_tx.push_str(&format!("{:02x}", vin_count));
-
-
-    for vin in &transaction.vin {
-        // Serialize txid and push
-        serialized_tx.push_str(&vin.txid);
-
-        // Serialize vout and push
-        let vout = &vin.vout.to_le_bytes();
-        let vout_hex = hex::encode(vout);
-        serialized_tx.push_str(&vout_hex);
-
-        // If its strictly a segwit tx, scriptsig field is empty so push zero
-        if vin.scriptsig.is_empty() {
-            serialized_tx.push_str("00");
-        } else {
-            // Otherwise it's a tx with both legacy and segwit inputs so I have to add the scriptsig
-            // Coppied from the legacy serialize_tx function
-            // Serialize scriptSig size I kept getting trailing zeros after my compactsize hex
-            let scriptsig_size = vin.scriptsig.len() / 2;
-
-            // So I had to do this to remove the trailing zeros
-            // It basically converts the u64 to bytes then to a vec then removes the trailing zeros
-            let mut scriptsig_size_bytes = (scriptsig_size as u64).to_le_bytes().to_vec();
-
-            if let Some(last_non_zero_position) = scriptsig_size_bytes.iter().rposition(|&x| x != 0) {
-                scriptsig_size_bytes.truncate(last_non_zero_position + 1);
-            }
-
-            let scriptsig_size_hex = hex::encode(&scriptsig_size_bytes);
-            serialized_tx.push_str(&scriptsig_size_hex);
-
-            // Now push scriptsig itself
-            serialized_tx.push_str(&vin.scriptsig);
-        }
-
-        let sequence = &vin.sequence.to_le_bytes();
-        let sequence_hex = hex::encode(sequence);
-        serialized_tx.push_str(&sequence_hex);
-
-    }
-
-    let vout_count = transaction.vout.len() as u64;
-    serialized_tx.push_str(&format!("{:02x}", vout_count));
-
-
-    // Serialize vout count and push the numb of outputs
-    // I copied it from the legacy serialize_tx function
-    for vout in &transaction.vout {
-
-        // Next push the amount of satoshis
-        let value = &vout.value.to_le_bytes();
-        serialized_tx.push_str(&hex::encode(value));
-
-        // Now push the scriptpubkey cpmpact size
-
-        // Just like above I had to remove the trailing zeros}
-        let scriptpubkey_size = vout.scriptpubkey.len() / 2;
-        let mut scriptpubkey_size_bytes = (scriptpubkey_size as u64).to_le_bytes().to_vec();
-        if let Some(last_non_zero_position) = scriptpubkey_size_bytes.iter().rposition(|&x| x != 0) {
-            scriptpubkey_size_bytes.truncate(last_non_zero_position + 1);
-        }
-        let scriptpubkey_size_hex = hex::encode(&scriptpubkey_size_bytes);
-        serialized_tx.push_str(&scriptpubkey_size_hex);
-        serialized_tx.push_str(&vout.scriptpubkey);
-    }
-
-    // Now time for the witness fields
-    for vin in &transaction.vin {
-        if let Some(witness) = &vin.witness {
-            // Serialize the number of stack items for the witness!
-            let stack_items = witness.len() as u64;
-            serialized_tx.push_str(&format!("{:02x}", stack_items));
-
-            for witness_feild in witness {
-                // Get compact size
-                // Why does script_sig have trailing zeros but none here in compact size
-                let compact_size = witness_feild.len() / 2;
-                serialized_tx.push_str(&format!("{:02x}", compact_size));
-                serialized_tx.push_str(witness_feild);
-
-            }
-        }
-    }
-
-    // Finally add the locktime
-    let lock = &transaction.locktime.to_le_bytes();
-    let lock_hex = hex::encode(lock);
-    serialized_tx.push_str(&lock_hex);
-
-    // Unsure if segwit tx's need a sighash type so will keep it commented for now
-    // if transaction.sighash.is_some() {
-    //         serialized_tx.push_str(&<std::option::Option<std::string::String> as Clone>::clone(&transaction.sighash).unwrap());
-    //     }
-
-     serialized_tx
-}
+// /// This function will serialize a segwit transaction into a string of hex bytes
+// fn serialized_segwit_tx(transaction: &Transaction) -> String {
+//     let mut serialized_tx = String::new();
+//
+//     let version = transaction.version.to_le_bytes();
+//     serialized_tx.push_str(&hex::encode(version));
+//
+//     // In a segwit transaction I have to add a marker and a flag
+//     // Marker is always 00 and flag is always 01
+//     serialized_tx.push_str("00");
+//     serialized_tx.push_str("01");
+//
+//     // Serialize vin count and push the numb of inputs
+//     let vin_count = transaction.vin.len() as u64;
+//     serialized_tx.push_str(&format!("{:02x}", vin_count));
+//
+//
+//     for vin in &transaction.vin {
+//         // Serialize txid and push
+//         serialized_tx.push_str(&vin.txid);
+//
+//         // Serialize vout and push
+//         let vout = &vin.vout.to_le_bytes();
+//         let vout_hex = hex::encode(vout);
+//         serialized_tx.push_str(&vout_hex);
+//
+//         // If its strictly a segwit tx, scriptsig field is empty so push zero
+//         if vin.scriptsig.is_empty() {
+//             serialized_tx.push_str("00");
+//         } else {
+//             // Otherwise it's a tx with both legacy and segwit inputs so I have to add the scriptsig
+//             // Coppied from the legacy serialize_tx function
+//             // Serialize scriptSig size I kept getting trailing zeros after my compactsize hex
+//             let scriptsig_size = vin.scriptsig.len() / 2;
+//
+//             // So I had to do this to remove the trailing zeros
+//             // It basically converts the u64 to bytes then to a vec then removes the trailing zeros
+//             let mut scriptsig_size_bytes = (scriptsig_size as u64).to_le_bytes().to_vec();
+//
+//             if let Some(last_non_zero_position) = scriptsig_size_bytes.iter().rposition(|&x| x != 0) {
+//                 scriptsig_size_bytes.truncate(last_non_zero_position + 1);
+//             }
+//
+//             let scriptsig_size_hex = hex::encode(&scriptsig_size_bytes);
+//             serialized_tx.push_str(&scriptsig_size_hex);
+//
+//             // Now push scriptsig itself
+//             serialized_tx.push_str(&vin.scriptsig);
+//         }
+//
+//         let sequence = &vin.sequence.to_le_bytes();
+//         let sequence_hex = hex::encode(sequence);
+//         serialized_tx.push_str(&sequence_hex);
+//
+//     }
+//
+//     let vout_count = transaction.vout.len() as u64;
+//     serialized_tx.push_str(&format!("{:02x}", vout_count));
+//
+//
+//     // Serialize vout count and push the numb of outputs
+//     // I copied it from the legacy serialize_tx function
+//     for vout in &transaction.vout {
+//
+//         // Next push the amount of satoshis
+//         let value = &vout.value.to_le_bytes();
+//         serialized_tx.push_str(&hex::encode(value));
+//
+//         // Now push the scriptpubkey cpmpact size
+//
+//         // Just like above I had to remove the trailing zeros}
+//         let scriptpubkey_size = vout.scriptpubkey.len() / 2;
+//         let mut scriptpubkey_size_bytes = (scriptpubkey_size as u64).to_le_bytes().to_vec();
+//         if let Some(last_non_zero_position) = scriptpubkey_size_bytes.iter().rposition(|&x| x != 0) {
+//             scriptpubkey_size_bytes.truncate(last_non_zero_position + 1);
+//         }
+//         let scriptpubkey_size_hex = hex::encode(&scriptpubkey_size_bytes);
+//         serialized_tx.push_str(&scriptpubkey_size_hex);
+//         serialized_tx.push_str(&vout.scriptpubkey);
+//     }
+//
+//     // Now time for the witness fields
+//     for vin in &transaction.vin {
+//         if let Some(witness) = &vin.witness {
+//             // Serialize the number of stack items for the witness!
+//             let stack_items = witness.len() as u64;
+//             serialized_tx.push_str(&format!("{:02x}", stack_items));
+//
+//             for witness_feild in witness {
+//                 // Get compact size
+//                 // Why does script_sig have trailing zeros but none here in compact size
+//                 let compact_size = witness_feild.len() / 2;
+//                 serialized_tx.push_str(&format!("{:02x}", compact_size));
+//                 serialized_tx.push_str(witness_feild);
+//
+//             }
+//         }
+//     }
+//
+//     // Finally add the locktime
+//     let lock = &transaction.locktime.to_le_bytes();
+//     let lock_hex = hex::encode(lock);
+//     serialized_tx.push_str(&lock_hex);
+//
+//     // Unsure if segwit tx's need a sighash type so will keep it commented for now
+//     // if transaction.sighash.is_some() {
+//     //         serialized_tx.push_str(&<std::option::Option<std::string::String> as Clone>::clone(&transaction.sighash).unwrap());
+//     //     }
+//
+//      serialized_tx
+// }
 
 /// This function will verify the signature of a transaction when passed into OP_CHECKSIG
 fn verify_signature(
