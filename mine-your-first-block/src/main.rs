@@ -814,6 +814,15 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProcessin
                     //eprintln!("Transaction is not valid: {:?}", path);
                 }
 
+                // Check if locktime is valid by comparing it to the current time
+                let current_time = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .expect("Time went backwards")
+                    .as_secs() as u32;
+                if transaction.locktime > current_time && transaction.locktime >= 500_000_000 {
+                    continue;
+                }
+
 
                 // Get the fee if valid so  i can add it to my vec
                 let fee = verify_tx_fee(&transaction);
@@ -880,6 +889,8 @@ fn  calculate_transaction_weight(tx: &Transaction)  ->  u64  {
     tx_weight
 }
 
+// ISSUE Block does not meet target difficulty
+// So my block hash is too big so maybe too many transations in a block?
 fn main() {
     let mempool_path = "../mempool";
 
