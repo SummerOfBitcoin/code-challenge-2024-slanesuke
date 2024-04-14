@@ -137,7 +137,8 @@ fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
 fn construct_block_header(valid_tx_vec: Vec<String>, nonce: u32) -> BlockHeader {
 
     let mut block_header = BlockHeader{
-        version: 0,
+        version: 0x20000000,
+        // version: 7,
         prev_block_hash: "".to_string(),
         merkle_root: "".to_string(),
         timestamp: 0,
@@ -146,9 +147,9 @@ fn construct_block_header(valid_tx_vec: Vec<String>, nonce: u32) -> BlockHeader 
     };
     // The default block version using a BIP 9 bit field is 0b00100000000000000000000000000000.
     // In hex this is 0x20000000 little endian
-    let block_version = 0b00100000000000000000000000000000u32.to_le_bytes();
-    let block_version_hex = hex::encode(block_version);
-    block_header.version = block_version_hex.parse().unwrap();
+    // let block_version = 0b00100000000000000000000000000000u32.to_le_bytes();
+    // let block_version_hex = hex::encode(block_version);
+    // block_header.version = block_version_hex.parse().unwrap();
 
     // I chose to use block height 837122 for my block just becase that was the current block height
     // at the time of my project (when i made my coinbase tx fn)
@@ -933,7 +934,7 @@ fn main() {
 
     for tx in valid_tx_clone {
         let tx_weight = calculate_transaction_weight(&tx.transaction);
-        if total_weight + tx_weight > 1000000 {
+        if total_weight + tx_weight > 4000000 {
             // If the block weight exceeds the limit, break the loop
             break;
         }
