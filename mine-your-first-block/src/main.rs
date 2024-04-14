@@ -826,13 +826,13 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProcessin
 
                 // Get the fee if valid so  i can add it to my vec
                 let fee = verify_tx_fee(&transaction);
-                // if fee < 0 {
-                //     //eprintln!("Transaction has a negative fee: {:?}", path);
-                //     continue;
-                // } else if fee < 1000 {
-                //     //eprintln!("Transaction has a fee below 1000 satoshis: {:?}", path);
-                //     continue;
-                // }
+                if fee < 0 {
+                    //eprintln!("Transaction has a negative fee: {:?}", path);
+                    continue;
+                } else if fee < 1000 {
+                    //eprintln!("Transaction has a fee below 1000 satoshis: {:?}", path);
+                    continue;
+                }
 
                 // Remove dust transactions
                 let min_relay_fee_per_byte: u64 = 3; // 3 satoshis per byte  could go up or down 1-5
@@ -913,7 +913,8 @@ fn main() {
     for tx in valid_tx_clone {
         let tx_weight = calculate_transaction_weight(&tx.transaction);
         if total_weight + tx_weight > 4000000 {
-            continue;
+            // If the block weight exceeds the limit, break the loop
+            break;
         }
         block_txs.push(tx.clone());
         total_weight += tx_weight;
