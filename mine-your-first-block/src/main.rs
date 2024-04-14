@@ -14,6 +14,7 @@ use std::error::Error;
 use std::fs;
 use secp256k1::ecdsa::Signature;
 use primitive_types::U256;
+use byteorder::{LittleEndian, WriteBytesExt};
 
 
 
@@ -175,30 +176,50 @@ fn construct_block_header(valid_tx_vec: Vec<String>, nonce: u32) -> BlockHeader 
     block_header
 }
 
-// This function serializes the block header because it's a bit different from a reg tx
+/// This function serializes the block header because it's a bit different from a reg tx
+// Previously i serialized each input at a time but this fn does each field at a once  so it should
+// speed up the process???
 fn serialize_block_header(block_header: &BlockHeader) -> Vec<u8> {
-    let mut serialized_bh = Vec::new();
+    // Create a buffer of the exact size needed for the block header
+    let mut buffer = vec![0u8; 80];  // 80 bytes for Bitcoin block header
 
-    // Version 4 bytes lil endian
-   serialized_bh.extend(&block_header.version.to_le_bytes());
+    {
+        let mut writer = &mut buffer[..];
 
-    // Previous Block natural byte order 32 bytes
-    serialized_bh.extend_from_slice(&hex::decode(&block_header.prev_block_hash).unwrap());
+        // Write each field directly into the buffer at the correct position
+        writer.write_u32::<LittleEndian>(block_header.version).unwrap();
+        writer.write_all(&hex::decode(&block_header.prev_block_hash).unwrap()).unwrap();
+        writer.write_all(&hex::decode(&block_header.merkle_root).unwrap()).unwrap();
+        writer.write_u32::<LittleEndian>(block_header.timestamp).unwrap();
+        writer.write_u32::<LittleEndian>(block_header.bits).unwrap();
+        writer.write_u32::<LittleEndian>(block_header.nonce).unwrap();
+    }
 
-    // Merkle root natural byte order 32 bytes
-    serialized_bh.extend_from_slice(&hex::decode(&block_header.merkle_root).unwrap());
-
-    // Timestamp 4 bytes lil endian
-    serialized_bh.extend(&block_header.timestamp.to_le_bytes());
-
-    // Bits 4 bytes
-    serialized_bh.extend(&block_header.bits.to_le_bytes());
-
-    // Nonce bytes lil endian
-    serialized_bh.extend(&block_header.nonce.to_le_bytes());
-
-    serialized_bh
+    buffer
 }
+// fn serialize_block_header(block_header: &BlockHeader) -> Vec<u8> {
+//     let mut serialized_bh = Vec::new();
+//
+//     // Version 4 bytes lil endian
+//    serialized_bh.extend(&block_header.version.to_le_bytes());
+//
+//     // Previous Block natural byte order 32 bytes
+//     serialized_bh.extend_from_slice(&hex::decode(&block_header.prev_block_hash).unwrap());
+//
+//     // Merkle root natural byte order 32 bytes
+//     serialized_bh.extend_from_slice(&hex::decode(&block_header.merkle_root).unwrap());
+//
+//     // Timestamp 4 bytes lil endian
+//     serialized_bh.extend(&block_header.timestamp.to_le_bytes());
+//
+//     // Bits 4 bytes
+//     serialized_bh.extend(&block_header.bits.to_le_bytes());
+//
+//     // Nonce bytes lil endian
+//     serialized_bh.extend(&block_header.nonce.to_le_bytes());
+//
+//     serialized_bh
+// }
 
 fn get_merkle_root(txids: Vec<String>) -> String {
     // In natural byte order
