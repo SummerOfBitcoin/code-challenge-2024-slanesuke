@@ -933,7 +933,7 @@ fn main() {
 
     for tx in valid_tx_clone {
         let tx_weight = calculate_transaction_weight(&tx.transaction);
-        if total_weight + tx_weight > 3000000 {
+        if total_weight + tx_weight > 1000000 {
             // If the block weight exceeds the limit, break the loop
             break;
         }
