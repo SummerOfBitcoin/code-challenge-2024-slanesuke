@@ -914,6 +914,7 @@ fn  calculate_transaction_weight(tx: &Transaction)  ->  u64  {
 // ISSUE Block does not meet target difficulty
 // So my block hash is too big so maybe too many transations in a block?
 fn main() {
+    // Path to the mempool folder
     let mempool_path = "../mempool";
 
     // Initialize nonce value;
@@ -950,10 +951,20 @@ fn main() {
         collect();
 
     // Get txids from sorted valid txs
-    let sorted_txids : Vec<String> = sorted_valid_tx.iter().map(|tx| tx.txid.clone()).collect();
+    let mut sorted_txids : Vec<String> = sorted_valid_tx.iter().map(|tx| tx.txid.clone()).collect();
 
     // Start Mining!
     loop {
+        // Generate coinbase tx
+        let coinbase_tx = create_coinbase_tx(total_fees);
+        let serialized_cb_tx = serialize_tx(&coinbase_tx);
+
+        // coinbase txid
+        let coinbase_txid = double_sha256(serialized_cb_tx.as_bytes().to_vec());
+
+        // Insert the coinbase txid at the beginning of the valid_txids vector
+        sorted_txids.insert(0, hex::encode(coinbase_txid));
+
         // Get the block header and serialize it
         let block_header = construct_block_header(sorted_txids.clone(), nonce);
 
@@ -965,22 +976,12 @@ fn main() {
         // Check if the hash meets the target
         if hash_meets_difficulty_target(&block_hash) {
 
-            // Generate coinbase tx
-            let coinbase_tx = create_coinbase_tx(total_fees);
-            let serialized_cb_tx = serialize_tx(&coinbase_tx);
-
-            // coinbase txid
-            let coinbase_txid = double_sha256(serialized_cb_tx.as_bytes().to_vec());
-
             // Clear the output file
             fs::write("../output.txt", "").unwrap();
 
             // Write the block header, coinbase tx, and txids to the output file
             append_to_file("../output.txt", &hex::encode(serialized_block_header)).unwrap();
             append_to_file("../output.txt", &serialized_cb_tx).unwrap();
-
-            // Insert the coinbase txid at the beginning of the valid_txids vector
-            valid_txids.insert(0, hex::encode(coinbase_txid));
 
             // Add the txids to the block
             for txid in &sorted_txids {
