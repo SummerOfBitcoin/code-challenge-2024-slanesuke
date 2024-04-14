@@ -13,6 +13,9 @@ use secp256k1::{PublicKey, Secp256k1, Message};
 use std::error::Error;
 use std::fs;
 use secp256k1::ecdsa::Signature;
+use primitive_types::U256;
+
+
 
 // Transaction struct that may be overcomplicated right now. We will see
 #[derive(Debug, Deserialize, Clone)]
@@ -866,15 +869,12 @@ fn calculate_hash(block_header: Vec<u8>) -> String {
     hex::encode(hash)
 }
 
+/// This function takes the target and hash, converts them to a big int, then compares
 fn hash_meets_difficulty_target(hash: &str) -> bool {
-    let mut target_met = false;
-    // if target is below the hash return true
-    // I didn't know i could compare hex strings like this!
-    let target = "0000ffff00000000000000000000000000000000000000000000000000000000";
-    if hash < target {
-        target_met = true;
-    }
-    target_met
+    let target_string = "0000ffff00000000000000000000000000000000000000000000000000000000";
+    let target = U256::from_str_radix(target_string, 16).unwrap();
+    let hash_as_num = U256::from_str_radix(hash, 16).unwrap();
+    hash_as_num < target
 }
 
 fn  calculate_transaction_weight(tx: &Transaction)  ->  u64  {
@@ -923,7 +923,10 @@ fn main() {
     }
 
     // Sort the transactions in descending order based on the fee
-    let sorted_valid_tx: Vec<_> = block_txs.iter().cloned().sorted_by(|a, b| b.fee.cmp(&a.fee)).collect();
+    let sorted_valid_tx: Vec<_> = block_txs.iter()
+        .cloned().sorted_by(|a, b| b.fee.cmp(&a.fee)).
+        collect();
+
     // Get txids from sorted valid txs
     let sorted_txids : Vec<String> = sorted_valid_tx.iter().map(|tx| tx.txid.clone()).collect();
 
@@ -961,6 +964,9 @@ fn main() {
             for txid in &sorted_txids {
                 append_to_file("../output.txt", txid).unwrap();
             }
+
+            println!("Success, the block met the target difficulty!");
+
             break;
         } else {
             nonce += 1;
