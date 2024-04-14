@@ -24,6 +24,7 @@ struct Transaction {
     sighash: Option<String>,
 }
 
+// This struct is used to store the transaction and its fee for processing into the block
 #[derive(Clone)]
 struct TransactionForProcessing {
     transaction: Transaction,
@@ -70,7 +71,7 @@ struct BlockHeader {
     nonce: u32
 }
 
-// TODO need to return a Transaction struct becasue this is bad practice and inefficient
+/// This function will return the coinbase transaction
 fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
     let mut coinbase_tx = Transaction {
         version: 0,
@@ -80,13 +81,14 @@ fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
         sighash: None,
     };
 
+    // Just chose a recent block height
     let block_height: u32 = 837122;
     let block_height_bytes = block_height.to_le_bytes();
     let block_height_hex = hex::encode(block_height_bytes);
 
+    //  The block subsidy is 6.25 btc plus the fees from the transactions
     let block_substidy_plus_fees: u64 = 625000000 + total_tx_fee;
 
-    //let address = "36tvL5nHzSffbx4v9UhBfyGLWAkBUKyoxn".to_string();
     let address_hex =  "053918f36132b92f65c11de2deeccf2f0b35177df3297ed5db".to_string();
 
     let extra_nonce_hex = hex::encode("SlanesukeSOBIntern2024".as_bytes());
@@ -127,9 +129,7 @@ fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
     coinbase_tx
 }
 
-// Output block header?
-//: 140000000000000000000000000205e5b86991b1b0a370fb7e2b7126d32de18e48e556c46d340c856df4b923159ec91c1a571f3668773bded468fc7bc45b9cc72cfff31977901966ffff001da00f0000
-
+// This function creates the block header struct
 fn construct_block_header(valid_tx_vec: Vec<String>, nonce: u32) -> BlockHeader {
 
     let mut block_header = BlockHeader{
@@ -172,7 +172,7 @@ fn construct_block_header(valid_tx_vec: Vec<String>, nonce: u32) -> BlockHeader 
     block_header
 }
 
-// Serialize block header
+// This function serializes the block header because it's a bit different from a reg tx
 fn serialize_block_header(block_header: &BlockHeader) -> Vec<u8> {
     let mut serialized_bh = Vec::new();
 
@@ -213,7 +213,7 @@ fn get_merkle_root(txids: Vec<String>) -> String {
 
 
     // I need to Loop through the merkle tree and hash each pair of txids
-    // First i must concantenate the two txids (in order) and they must be 512 bits becasue each tx is 256 bits
+    // First I must concatenate the two txids (in order) and they must be 512 bits because each tx is 256 bits
     // double sha256 is used to hash
 
     // While the merkle tree has more than one txid
@@ -902,11 +902,11 @@ fn main() {
 
     // Calculate the total fees and get the txids
     let mut valid_txids: Vec<String> = Vec::new();
-    let mut fees: Vec<u64> = Vec::new();
 
     // Initializing block weight
     let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
     let mut total_weight = 0u64;
+    let mut total_fees = 0u64;
 
     let valid_tx_clone =  valid_tx.clone();
 
@@ -918,13 +918,12 @@ fn main() {
         }
         block_txs.push(tx.clone());
         total_weight += tx_weight;
+        total_fees  += tx.fee; // Add the fee to the total fees
         valid_txids.push(tx.txid.clone());
-        fees.push(tx.fee);
     }
-    let total_fees: u64 = fees.iter().sum();
 
     // Sort the transactions in descending order based on the fee
-    let sorted_valid_tx: Vec<_> = valid_tx.iter().cloned().sorted_by(|a, b| b.fee.cmp(&a.fee)).collect();
+    let sorted_valid_tx: Vec<_> = block_txs.iter().cloned().sorted_by(|a, b| b.fee.cmp(&a.fee)).collect();
     // Get txids from sorted valid txs
     let sorted_txids : Vec<String> = sorted_valid_tx.iter().map(|tx| tx.txid.clone()).collect();
 
@@ -952,14 +951,13 @@ fn main() {
             fs::write("../output.txt", "").unwrap();
 
             // Write the block header, coinbase tx, and txids to the output file
-            //append_to_file("../output.txt", &hash).unwrap();
             append_to_file("../output.txt", &hex::encode(serialized_block_header)).unwrap();
             append_to_file("../output.txt", &serialized_cb_tx).unwrap();
 
             // Insert the coinbase txid at the beginning of the valid_txids vector
-            // Hard  coded the coinbase txid just to test. NEED TO CHANGE
             valid_txids.insert(0, hex::encode(coinbase_txid));
 
+            // Add the txids to the block
             for txid in &sorted_txids {
                 append_to_file("../output.txt", txid).unwrap();
             }
@@ -967,6 +965,5 @@ fn main() {
         } else {
             nonce += 1;
         }
-
     }
 }
