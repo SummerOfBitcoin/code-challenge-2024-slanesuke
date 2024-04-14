@@ -137,8 +137,8 @@ fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
 fn construct_block_header(valid_tx_vec: Vec<String>, nonce: u32) -> BlockHeader {
 
     let mut block_header = BlockHeader{
-        version: 0x20000000,
-        // version: 7,
+        // version: 0x20000000,
+        version: 7,
         prev_block_hash: "".to_string(),
         merkle_root: "".to_string(),
         timestamp: 0,
