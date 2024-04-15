@@ -953,18 +953,17 @@ fn main() {
     // Get txids from sorted valid txs
     let mut sorted_txids : Vec<String> = sorted_valid_tx.iter().map(|tx| tx.txid.clone()).collect();
 
+    // Generate coinbase tx
+    let coinbase_tx = create_coinbase_tx(total_fees);
+    let serialized_cb_tx = serialize_tx(&coinbase_tx);
+
+    // coinbase txid
+    let coinbase_txid = double_sha256(serialized_cb_tx.as_bytes().to_vec());
+
+    // Insert the coinbase txid at the beginning of the valid_txids vector
+    sorted_txids.insert(0, hex::encode(coinbase_txid));
     // Start Mining!
     loop {
-        // Generate coinbase tx
-        let coinbase_tx = create_coinbase_tx(total_fees);
-        let serialized_cb_tx = serialize_tx(&coinbase_tx);
-
-        // coinbase txid
-        let coinbase_txid = double_sha256(serialized_cb_tx.as_bytes().to_vec());
-
-        // Insert the coinbase txid at the beginning of the valid_txids vector
-        sorted_txids.insert(0, hex::encode(coinbase_txid));
-
         // Get the block header and serialize it
         let block_header = construct_block_header(sorted_txids.clone(), nonce);
 
