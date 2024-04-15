@@ -137,8 +137,7 @@ fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
 fn construct_block_header(valid_tx_vec: Vec<String>, nonce: u32) -> BlockHeader {
 
     let mut block_header = BlockHeader{
-        // version: 0x20000000,
-        version: 7,
+        version: 0x20000000,
         prev_block_hash: "".to_string(),
         merkle_root: "".to_string(),
         timestamp: 0,
@@ -189,8 +188,10 @@ fn serialize_block_header(block_header: &BlockHeader) -> Vec<u8> {
 
         // Write each field directly into the buffer at the correct position
         writer.write_u32::<LittleEndian>(block_header.version).unwrap();
-        writer.write_all(&hex::decode(&block_header.prev_block_hash).unwrap()).unwrap();
-        writer.write_all(&hex::decode(&block_header.merkle_root).unwrap()).unwrap();
+        writer.write_all(&hex::decode(&block_header.prev_block_hash).unwrap().iter().rev().cloned().collect::<Vec<_>>()).unwrap();
+        writer.write_all(&hex::decode(&block_header.merkle_root).unwrap().iter().rev().cloned().collect::<Vec<_>>()).unwrap();
+        //writer.write_all(&hex::decode(&block_header.prev_block_hash).unwrap()).unwrap();
+        //writer.write_all(&hex::decode(&block_header.merkle_root).unwrap()).unwrap();
         writer.write_u32::<LittleEndian>(block_header.timestamp).unwrap();
         writer.write_u32::<LittleEndian>(block_header.bits).unwrap();
         writer.write_u32::<LittleEndian>(block_header.nonce).unwrap();
@@ -198,29 +199,7 @@ fn serialize_block_header(block_header: &BlockHeader) -> Vec<u8> {
 
     buffer
 }
-// fn serialize_block_header(block_header: &BlockHeader) -> Vec<u8> {
-//     let mut serialized_bh = Vec::new();
-//
-//     // Version 4 bytes lil endian
-//    serialized_bh.extend(&block_header.version.to_le_bytes());
-//
-//     // Previous Block natural byte order 32 bytes
-//     serialized_bh.extend_from_slice(&hex::decode(&block_header.prev_block_hash).unwrap());
-//
-//     // Merkle root natural byte order 32 bytes
-//     serialized_bh.extend_from_slice(&hex::decode(&block_header.merkle_root).unwrap());
-//
-//     // Timestamp 4 bytes lil endian
-//     serialized_bh.extend(&block_header.timestamp.to_le_bytes());
-//
-//     // Bits 4 bytes
-//     serialized_bh.extend(&block_header.bits.to_le_bytes());
-//
-//     // Nonce bytes lil endian
-//     serialized_bh.extend(&block_header.nonce.to_le_bytes());
-//
-//     serialized_bh
-// }
+
 
 fn get_merkle_root(txids: Vec<String>) -> String {
     // In natural byte order
@@ -257,8 +236,12 @@ fn get_merkle_root(txids: Vec<String>) -> String {
                 // It shouldn't be though because I duplicated the last txid
                 &merkle_tree[i]
             };
-
+            // My merkle root is wrong in the test.
+            // So below I reversed the byte order of the txids before concatenating them
+            let txid0 = hex::encode(hex::decode(txid0).unwrap().iter().rev().cloned().collect::<Vec<_>>());
+            let txid1 = hex::encode(hex::decode(txid1).unwrap().iter().rev().cloned().collect::<Vec<_>>());
             let concatenated_txids = format!("{}{}", txid0, txid1);
+
             let merkle_hash = double_sha256(concatenated_txids.as_bytes().to_vec());
             let merkle_hash_hex = hex::encode(merkle_hash);
 
@@ -921,7 +904,7 @@ fn main() {
     let mut nonce = 0u32;
 
     // Get the valid txs from the mempool
-    let mut valid_tx = process_mempool(mempool_path).unwrap();
+    let valid_tx = process_mempool(mempool_path).unwrap();
 
     // Calculate the total fees and get the txids
     let mut valid_txids: Vec<String> = Vec::new();
@@ -962,6 +945,7 @@ fn main() {
 
     // Insert the coinbase txid at the beginning of the valid_txids vector
     sorted_txids.insert(0, hex::encode(coinbase_txid));
+
     // Start Mining!
     loop {
         // Get the block header and serialize it
@@ -971,6 +955,8 @@ fn main() {
 
         // Calculate the hash of the block header
         let block_hash = calculate_hash(serialized_block_header.clone());
+
+        println!("Nonce: {}, Hash: {}", nonce, block_hash);
 
         // Check if the hash meets the target
         if hash_meets_difficulty_target(&block_hash) {
