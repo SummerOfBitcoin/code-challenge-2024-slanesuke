@@ -134,7 +134,7 @@ fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
 }
 
 // This function creates the block header struct
-fn construct_block_header(valid_tx_vec: Vec<String>, nonce: u32) -> BlockHeader {
+fn construct_block_header(valid_tx_vec: Vec<String>, nonce: u32, merkle_root: String) -> BlockHeader {
 
     let mut block_header = BlockHeader{
         version: 0x20000000,
@@ -157,9 +157,6 @@ fn construct_block_header(valid_tx_vec: Vec<String>, nonce: u32) -> BlockHeader 
     block_header.prev_block_hash = prev_block_hash.to_string();
 
     // Left off on merkle root!!  Lets go!
-    // Need to get the txids from the valid txs vec But this is just a placeholder for now
-    let txids: Vec<String> = valid_tx_vec.iter().map(|txid| txid.clone()).collect();
-    let merkle_root = get_merkle_root(txids);
     block_header.merkle_root = merkle_root;
 
     let timestamp = SystemTime::now()
@@ -188,6 +185,7 @@ fn serialize_block_header(block_header: &BlockHeader) -> Vec<u8> {
 
         // Write each field directly into the buffer at the correct position
         writer.write_u32::<LittleEndian>(block_header.version).unwrap();
+        // I had to reverse the byte order of the prev block hash and merkle root to test
         writer.write_all(&hex::decode(&block_header.prev_block_hash).unwrap().iter().rev().cloned().collect::<Vec<_>>()).unwrap();
         writer.write_all(&hex::decode(&block_header.merkle_root).unwrap().iter().rev().cloned().collect::<Vec<_>>()).unwrap();
         //writer.write_all(&hex::decode(&block_header.prev_block_hash).unwrap()).unwrap();
@@ -834,11 +832,8 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProcessin
 
                 // Get the fee if valid so  i can add it to my vec
                 let fee = verify_tx_fee(&transaction);
-                if fee < 0 {
+                if fee < 1000 {
                     //eprintln!("Transaction has a negative fee: {:?}", path);
-                    continue;
-                } else if fee < 1000 {
-                    //eprintln!("Transaction has a fee below 1000 satoshis: {:?}", path);
                     continue;
                 }
 
@@ -946,23 +941,28 @@ fn main() {
     // Insert the coinbase txid at the beginning of the valid_txids vector
     sorted_txids.insert(0, hex::encode(coinbase_txid));
 
+    let merkle_root = get_merkle_root(sorted_txids.clone());
+
     // Start Mining!
     loop {
         // Get the block header and serialize it
-        let block_header = construct_block_header(sorted_txids.clone(), nonce);
+        let block_header = construct_block_header(sorted_txids.clone(), nonce, merkle_root.clone());
 
         let serialized_block_header = serialize_block_header(&block_header);
 
         // Calculate the hash of the block header
         let block_hash = calculate_hash(serialized_block_header.clone());
 
-        println!("Nonce: {}, Hash: {}", nonce, block_hash);
+        //println!("Nonce: {}, Hash: {}", nonce, block_hash);
 
         // Check if the hash meets the target
         if hash_meets_difficulty_target(&block_hash) {
 
             // Clear the output file
             fs::write("../output.txt", "").unwrap();
+
+            // Clear test file
+            fs::write("../test.txt", "").unwrap();
 
             // Write the block header, coinbase tx, and txids to the output file
             append_to_file("../output.txt", &hex::encode(serialized_block_header)).unwrap();
@@ -971,6 +971,10 @@ fn main() {
             // Add the txids to the block
             for txid in &sorted_txids {
                 append_to_file("../output.txt", txid).unwrap();
+
+                // Making a test file to verify if i'm adding the right transactions to
+                // test my merkle root
+                append_to_file("../test.txt", txid).unwrap();
             }
 
             println!("Success, the block met the target difficulty!");
