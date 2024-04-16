@@ -134,14 +134,14 @@ fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
 }
 
 // This function creates the block header struct
-fn construct_block_header(valid_tx_vec: Vec<String>, nonce: u32, merkle_root: String) -> BlockHeader {
+fn construct_block_header(nonce: u32, merkle_root: String) -> BlockHeader {
 
     let mut block_header = BlockHeader{
-        version: 0x20000000,
+        version: 2,
         prev_block_hash: "".to_string(),
-        merkle_root: "".to_string(),
+        merkle_root: merkle_root.to_string(),
         timestamp: 0,
-        bits:  0x1d00ffff,  // Hard coded 'bits' value
+        bits: 0x1f00ffff, // Hard coded 'bits' value
         nonce: 0,
     };
     // The default block version using a BIP 9 bit field is 0b00100000000000000000000000000000.
@@ -156,8 +156,7 @@ fn construct_block_header(valid_tx_vec: Vec<String>, nonce: u32, merkle_root: St
     let prev_block_hash = "0000000000000000000205e5b86991b1b0a370fb7e2b7126d32de18e48e556c4";
     block_header.prev_block_hash = prev_block_hash.to_string();
 
-    // Left off on merkle root!!  Lets go!
-    block_header.merkle_root = merkle_root;
+
 
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -175,9 +174,8 @@ fn construct_block_header(valid_tx_vec: Vec<String>, nonce: u32, merkle_root: St
 
 /// This function serializes the block header because it's a bit different from a reg tx
 // Previously i serialized each input at a time but this fn does each field at a once  so it should
-// speed up the process???
+// speed up the process???c
 fn serialize_block_header(block_header: &BlockHeader) -> Vec<u8> {
-    // Create a buffer of the exact size needed for the block header
     let mut buffer = vec![0u8; 80];  // 80 bytes for Bitcoin block header
 
     {
@@ -185,11 +183,8 @@ fn serialize_block_header(block_header: &BlockHeader) -> Vec<u8> {
 
         // Write each field directly into the buffer at the correct position
         writer.write_u32::<LittleEndian>(block_header.version).unwrap();
-        // I had to reverse the byte order of the prev block hash and merkle root to test
-        writer.write_all(&hex::decode(&block_header.prev_block_hash).unwrap().iter().rev().cloned().collect::<Vec<_>>()).unwrap();
-        writer.write_all(&hex::decode(&block_header.merkle_root).unwrap().iter().rev().cloned().collect::<Vec<_>>()).unwrap();
-        //writer.write_all(&hex::decode(&block_header.prev_block_hash).unwrap()).unwrap();
-        //writer.write_all(&hex::decode(&block_header.merkle_root).unwrap()).unwrap();
+        writer.write_all(&hex::decode(&block_header.prev_block_hash).unwrap()).unwrap();
+        writer.write_all(&hex::decode(&block_header.merkle_root).unwrap()).unwrap();
         writer.write_u32::<LittleEndian>(block_header.timestamp).unwrap();
         writer.write_u32::<LittleEndian>(block_header.bits).unwrap();
         writer.write_u32::<LittleEndian>(block_header.nonce).unwrap();
@@ -199,64 +194,46 @@ fn serialize_block_header(block_header: &BlockHeader) -> Vec<u8> {
 }
 
 
-fn get_merkle_root(txids: Vec<String>) -> String {
-    // In natural byte order
 
-    // Need to hash all txids in the block until i get one merkle root
-    // if valid txs is odd duplicate the last one and hash it with itself
-    // let _merkle_root = String::new();
-    let mut merkle_tree = txids.clone();
+
+fn get_merkle_root(txids: Vec<String>) -> String {
+    // the txids are in little endian so to get the merkle root i need to put them back in natural byte
+    // order
+    // This is done by decoding the hex string to bytes then reversing the bytes and encoding them back
+    // I found this helpful online
+    let mut be_txid = txids.iter()
+        .map(|txid| {
+            let decoded_id = hex::decode(txid).unwrap();
+            let reversed_id = decoded_id.iter().rev().cloned().collect::<Vec<u8>>();
+            double_sha256(reversed_id)
+        }).collect::<Vec<[u8; 32]>>(); // fixed size array of 32 bytes
+
 
     // If the number of txs is odd, duplicate the last tx and hash it with itself
-    if merkle_tree.len() % 2 != 0 {
-        let last_tx = merkle_tree.last().unwrap().clone();
-        merkle_tree.push(last_tx);
-    }
-
-
     // I need to Loop through the merkle tree and hash each pair of txids
     // First I must concatenate the two txids (in order) and they must be 512 bits because each tx is 256 bits
     // double sha256 is used to hash
 
     // While the merkle tree has more than one txid
-    while merkle_tree.len() > 1 {
-        let mut temp_merkle_tree = Vec::new();
-
-        // For each pair of txids in the merkle tree
-        // Hash them together and push the hash to the temp merkle tree
-        // Then once there is the merkle root left, return it as
-        for i in (0..merkle_tree.len()).step_by(2) {
-            let txid0 = &merkle_tree[i];
-            let txid1 = if i+1 < merkle_tree.len() {
-                &merkle_tree[i+1]
-            } else {
-                // This is a catch statement for when the number of txs is odd
-                // It shouldn't be though because I duplicated the last txid
-                &merkle_tree[i]
-            };
-            // My merkle root is wrong in the test.
-            // So below I reversed the byte order of the txids before concatenating them
-            let txid0 = hex::encode(hex::decode(txid0).unwrap().iter().rev().cloned().collect::<Vec<_>>());
-            let txid1 = hex::encode(hex::decode(txid1).unwrap().iter().rev().cloned().collect::<Vec<_>>());
-            let concatenated_txids = format!("{}{}", txid0, txid1);
-
-            let merkle_hash = double_sha256(concatenated_txids.as_bytes().to_vec());
-            let merkle_hash_hex = hex::encode(merkle_hash);
-
-            temp_merkle_tree.push(merkle_hash_hex);
+    while be_txid.len() > 1 {
+        if be_txid.len() % 2 != 0 {
+            be_txid.push(be_txid.last().unwrap().clone());
         }
-        merkle_tree = temp_merkle_tree;
+
+        // a bit confused so skipped the doublehash fn
+        be_txid = be_txid.chunks(2)
+            .map(|pair| {
+                let mut hasher = Sha256::new();
+                hasher.update(pair[0]);
+                hasher.update(pair[1]);
+                let first_hash = hasher.finalize_reset().to_vec();
+                hasher.update(first_hash);
+                hasher.finalize().try_into().expect("Hash should be 32 bytes")
+            }).collect()
     }
-    // If the merkle tree has one txid left, return it as the merkle root
-    if let Some(merkle_root) = merkle_tree.first() {
-        if merkle_root.len() != 64 {
-            panic!("Merkle root is over 32 bytes");
-        } else {
-            merkle_root.clone()
-        }
-    } else {
-        panic!("Merkle root is empty");
-    }
+    // The last hash in the merkle tree
+    // merkle root
+    hex::encode(be_txid[0])
 }
 
 fn deserialize_tx(filename: &str) -> Transaction {
@@ -713,8 +690,13 @@ fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Strin
     //////
     let serialized_validtx = serialized_tx_for_message.as_bytes();
     let txid: [u8; 32] = double_sha256(serialized_validtx.to_vec());
+    let txid_reversed = txid.iter().rev().cloned().collect::<Vec<u8>>();
+    let txid_hex = hex::encode(txid_reversed);
 
-    Ok((true, hex::encode(txid)))
+    //Ok((true, hex::encode(txid)))
+
+    // Ok((true, hex::encode(txid_hex)))
+    Ok((true, txid_hex))
 }
 
 /// This function will remove dust transactions from a transaction
@@ -841,19 +823,21 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProcessin
                 let min_relay_fee_per_byte: u64 = 3; // 3 satoshis per byte  could go up or down 1-5
                 remove_dust_transactions(&mut transaction, min_relay_fee_per_byte);
 
-                // Check for double spending
-                if !check_double_spending(&transaction, &valid_txs) {
-                    continue;
-                }
 
                 //println!("Transaction is valid for txid: {}", txid);
 
                 // Push the txid and fee to the valid_txs vec
                 valid_txs.push(TransactionForProcessing {
-                    transaction,
+                    transaction: transaction.clone(),
                     txid,
                     fee: fee as u64,
                 });
+
+                // Check for double spending
+                if !check_double_spending(&transaction, &valid_txs) {
+                    continue;
+                }
+
             }else {
                 //eprintln!("Failed to convert path to string: {:?}", path);
             }
@@ -901,8 +885,8 @@ fn main() {
     // Get the valid txs from the mempool
     let valid_tx = process_mempool(mempool_path).unwrap();
 
-    // Calculate the total fees and get the txids
-    let mut valid_txids: Vec<String> = Vec::new();
+    // // Calculate the total fees and get the txids
+    // let mut valid_txids: Vec<String> = Vec::new();
 
     // Initializing block weight
     let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
@@ -920,7 +904,6 @@ fn main() {
         block_txs.push(tx.clone());
         total_weight += tx_weight;
         total_fees  += tx.fee; // Add the fee to the total fees
-        valid_txids.push(tx.txid.clone());
     }
 
     // Sort the transactions in descending order based on the fee
@@ -937,16 +920,20 @@ fn main() {
 
     // coinbase txid
     let coinbase_txid = double_sha256(serialized_cb_tx.as_bytes().to_vec());
+    // Reverse the bytes
+    let coinbase_txid = coinbase_txid.iter().rev().cloned().collect::<Vec<u8>>();
 
     // Insert the coinbase txid at the beginning of the valid_txids vector
     sorted_txids.insert(0, hex::encode(coinbase_txid));
 
     let merkle_root = get_merkle_root(sorted_txids.clone());
 
+
+
     // Start Mining!
     loop {
         // Get the block header and serialize it
-        let block_header = construct_block_header(sorted_txids.clone(), nonce, merkle_root.clone());
+        let block_header = construct_block_header(nonce, merkle_root.clone());
 
         let serialized_block_header = serialize_block_header(&block_header);
 
@@ -968,16 +955,23 @@ fn main() {
             append_to_file("../output.txt", &hex::encode(serialized_block_header)).unwrap();
             append_to_file("../output.txt", &serialized_cb_tx).unwrap();
 
+            println!("Starting merkle root calculation with txids!");
             // Add the txids to the block
             for txid in &sorted_txids {
                 append_to_file("../output.txt", txid).unwrap();
+
+                // printing txids to check merkle root
+                println!("{}", txid);
 
                 // Making a test file to verify if i'm adding the right transactions to
                 // test my merkle root
                 append_to_file("../test.txt", txid).unwrap();
             }
+            let merkle_root = get_merkle_root(sorted_txids.clone());
+            println!("Calculated Merkle root: {}", merkle_root);
 
             println!("Success, the block met the target difficulty!");
+
 
             break;
         } else {
