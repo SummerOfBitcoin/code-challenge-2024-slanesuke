@@ -154,8 +154,12 @@ fn construct_block_header(nonce: u32, merkle_root: String) -> BlockHeader {
     // at the time of my project (when i made my coinbase tx fn)
     // So I will use the previous block hash of block 837121
     let prev_block_hash = "0000000000000000000205e5b86991b1b0a370fb7e2b7126d32de18e48e556c4";
-    block_header.prev_block_hash = prev_block_hash.to_string();
+    let decode_prev_block_hash = hex::decode(prev_block_hash).unwrap();
+    let reversed_prev_block_hash = decode_prev_block_hash.iter().rev().cloned().collect::<Vec<u8>>();
+    let reversed_hex = hex::encode(reversed_prev_block_hash);
 
+    //block_header.prev_block_hash = prev_block_hash.to_string();
+    block_header.prev_block_hash = reversed_hex.to_string();
 
 
     let timestamp = SystemTime::now()
@@ -897,8 +901,7 @@ fn main() {
     // Initializing block weight
     let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
     let mut total_weight = 0u64;
-    // let max_block_weight = 4000000u64;
-    let max_block_weight = 500u64;
+    let max_block_weight = 4000000u64;
     let mut total_fees = 0u64;
 
     let valid_tx_clone =  valid_tx.clone();
