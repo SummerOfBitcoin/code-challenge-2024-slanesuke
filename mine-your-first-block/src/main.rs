@@ -345,7 +345,7 @@ fn serialize_tx(transaction: &Transaction) -> String {
     serialized_tx.push_str(&lock_hex);
 
     if transaction.sighash.is_some() {
-        serialized_tx.push_str(&<std::option::Option<std::string::String> as Clone>::clone(&transaction.sighash).unwrap());
+        serialized_tx.push_str(&<Option<String> as Clone>::clone(&transaction.sighash).unwrap());
     }
 
     serialized_tx
@@ -835,15 +835,8 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProcessin
                 let min_relay_fee_per_byte: u64 = 3; // 3 satoshis per byte  could go up or down 1-5
                 remove_dust_transactions(&mut transaction, min_relay_fee_per_byte);
 
-
-                //println!("Transaction is valid for txid: {}", txid);
-
                 // Push the txid and fee to the valid_txs vec
-                valid_txs.push(TransactionForProcessing {
-                    transaction: transaction.clone(),
-                    txid,
-                    fee: fee as u64,
-                });
+                valid_txs.push(TransactionForProcessing { transaction: transaction.clone(), txid, fee, });
 
                 // Check for double spending
                 if !check_double_spending(&transaction, &valid_txs) {
@@ -874,10 +867,9 @@ fn hash_meets_difficulty_target(hash: &str) -> bool {
 }
 
 fn  calculate_transaction_weight(tx: &Transaction)  ->  u64  {
-
+    // Serialized tx size without witness
     let base_size = serialize_tx(tx).len() as u64;
-    // Don't need yet because i've only verified p2pkh tx's
-    let total_size = serialize_tx(tx).len() as u64;
+    let total_size = base_size; // Need to update once i include more tx types
 
     // Calculate weight of the transaction
     let tx_weight = base_size * 3 + total_size;
@@ -903,13 +895,14 @@ fn main() {
     // Initializing block weight
     let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
     let mut total_weight = 0u64;
+    let max_block_weight = 4000000u64;
     let mut total_fees = 0u64;
 
     let valid_tx_clone =  valid_tx.clone();
 
     for tx in valid_tx_clone {
         let tx_weight = calculate_transaction_weight(&tx.transaction);
-        if total_weight + tx_weight > 2000000 {
+        if total_weight + tx_weight > max_block_weight {
             // If the block weight exceeds the limit, break the loop
             break;
         }
@@ -957,23 +950,18 @@ fn main() {
             // Clear the output file
             fs::write("../output.txt", "").unwrap();
 
-            // Clear test file
-            fs::write("../test.txt", "").unwrap();
-
             // Write the block header, coinbase tx, and txids to the output file
             append_to_file("../output.txt", &hex::encode(serialized_block_header)).unwrap();
             append_to_file("../output.txt", &serialized_cb_tx).unwrap();
 
             // to test block weight
-            let half_txid = sorted_txids.len() /2;
+            // let half_txid = sorted_txids.len() /2;
 
             // Add the txids to the block
-            for txid in &sorted_txids[0..half_txid] {
+            for txid in &sorted_txids {
                 append_to_file("../output.txt", txid).unwrap();
             }
             println!("Success, the block met the target difficulty!");
-
-
             break;
         } else {
             nonce += 1;
