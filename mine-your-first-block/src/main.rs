@@ -201,12 +201,24 @@ fn get_merkle_root(txids: Vec<String>) -> String {
     // order
     // This is done by decoding the hex string to bytes then reversing the bytes and encoding them back
     // I found this helpful online
+    // let mut be_txid = txids.iter()
+    //     .map(|txid| {
+    //         let decoded_id = hex::decode(txid).unwrap();
+    //         let reversed_id = decoded_id.iter().rev().cloned().collect::<Vec<u8>>();
+    //         double_sha256(reversed_id)
+    //     }).collect::<Vec<[u8; 32]>>(); // fixed size array of 32 bytes
+
+    // WTF I converted it to big endian but it gave me the wrong merkle root so
+    // I will just keep it in little endian and reverse the bytes when hashing (ithink)
     let mut be_txid = txids.iter()
         .map(|txid| {
             let decoded_id = hex::decode(txid).unwrap();
             let reversed_id = decoded_id.iter().rev().cloned().collect::<Vec<u8>>();
-            double_sha256(reversed_id)
-        }).collect::<Vec<[u8; 32]>>(); // fixed size array of 32 bytes
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(&reversed_id);
+            arr
+        })
+        .collect::<Vec<[u8; 32]>>();
 
 
     // If the number of txs is odd, duplicate the last tx and hash it with itself
@@ -928,8 +940,6 @@ fn main() {
 
     let merkle_root = get_merkle_root(sorted_txids.clone());
 
-
-
     // Start Mining!
     loop {
         // Get the block header and serialize it
@@ -940,7 +950,6 @@ fn main() {
         // Calculate the hash of the block header
         let block_hash = calculate_hash(serialized_block_header.clone());
 
-        //println!("Nonce: {}, Hash: {}", nonce, block_hash);
 
         // Check if the hash meets the target
         if hash_meets_difficulty_target(&block_hash) {
@@ -955,21 +964,11 @@ fn main() {
             append_to_file("../output.txt", &hex::encode(serialized_block_header)).unwrap();
             append_to_file("../output.txt", &serialized_cb_tx).unwrap();
 
-            println!("Starting merkle root calculation with txids!");
+
             // Add the txids to the block
             for txid in &sorted_txids {
                 append_to_file("../output.txt", txid).unwrap();
-
-                // printing txids to check merkle root
-                println!("{}", txid);
-
-                // Making a test file to verify if i'm adding the right transactions to
-                // test my merkle root
-                append_to_file("../test.txt", txid).unwrap();
             }
-            let merkle_root = get_merkle_root(sorted_txids.clone());
-            println!("Calculated Merkle root: {}", merkle_root);
-
             println!("Success, the block met the target difficulty!");
 
 
