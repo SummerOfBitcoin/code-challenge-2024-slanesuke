@@ -95,6 +95,8 @@ fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
 
     let address_hex =  "053918f36132b92f65c11de2deeccf2f0b35177df3297ed5db".to_string();
 
+    let scriptpubkey = "76a914053918f36132b92f65c11de2deeccf2f0b35177df3297ed5db88ac".to_string();
+
     let extra_nonce_hex = hex::encode("SlanesukeSOBIntern2024".as_bytes());
 
     let block_scriptsig = format!("{}{}", block_height_hex, extra_nonce_hex);
@@ -123,7 +125,8 @@ fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
 
     // Output count is 1 byte 01
     coinbase_tx.vout.push(Vout {
-        scriptpubkey: address_hex,
+        // scriptpubkey: address_hex,
+        scriptpubkey: scriptpubkey,
         scriptpubkey_asm: "".to_string(),
         scriptpubkey_type: "".to_string(),
         scriptpubkey_address: None,
