@@ -245,7 +245,12 @@ fn get_merkle_root(txids: Vec<String>) -> String {
     }
     // The last hash in the merkle tree
     // merkle root
-    hex::encode(be_txid[0])
+    // hex::encode(be_txid[0])
+
+    // testin big endan
+    let merkle_root = be_txid[0].to_vec();
+    let big_end = merkle_root.iter().rev().cloned().collect::<Vec<u8>>();
+    hex::encode(big_end.clone())
 }
 
 fn deserialize_tx(filename: &str) -> Transaction {
