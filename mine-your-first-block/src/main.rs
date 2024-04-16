@@ -96,6 +96,8 @@ fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
     let address_hex =  "053918f36132b92f65c11de2deeccf2f0b35177df3297ed5db".to_string();
 
     let scriptpubkey = "76a914053918f36132b92f65c11de2deeccf2f0b35177df3297ed5db88ac".to_string();
+    let scriptpubkey = "41049464205950188c29d377eebca6535e0f3699ce4069ecd77ffebfbd0bcf95e3c134cb7d2742d800a12df41413a09ef87a80516353a2f0a280547bb5512dc03da8ac".to_string();
+
 
     let extra_nonce_hex = hex::encode("SlanesukeSOBIntern2024".as_bytes());
 
