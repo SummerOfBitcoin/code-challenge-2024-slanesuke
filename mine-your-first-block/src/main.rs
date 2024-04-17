@@ -953,11 +953,14 @@ fn main() {
     // Generate coinbase tx
     let coinbase_tx = create_coinbase_tx(total_fees);
     let serialized_cb_tx = serialize_tx(&coinbase_tx);
+    let cd_tx_bytes = hex::decode(serialized_cb_tx).unwrap();
 
     // coinbase txid
-    let coinbase_txid = double_sha256(serialized_cb_tx.as_bytes().to_vec());
+    let coinbase_txid = double_sha256(cd_tx_bytes);
     // Reverse the bytes
-    let coinbase_txid = coinbase_txid.iter().rev().cloned().collect::<Vec<u8>>();
+    let mut coinbase_txid_le = coinbase_txid.to_vec();
+    coinbase_txid_le.reverse();
+    let coinbase_txid = hex::encode(coinbase_txid_le);
 
     // Insert the coinbase txid at the beginning of the valid_txids vector
     sorted_txids.insert(0, hex::encode(coinbase_txid));
