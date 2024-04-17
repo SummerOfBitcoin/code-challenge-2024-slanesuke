@@ -953,7 +953,6 @@ fn main() {
     // Generate coinbase tx
     let coinbase_tx = create_coinbase_tx(total_fees);
     let serialized_cb_tx = serialize_tx(&coinbase_tx);
-    println!("Coinbase TX: {}", serialized_cb_tx);
     let cd_tx_bytes = hex::decode(serialized_cb_tx.clone()).unwrap();
 
     // coinbase txid
