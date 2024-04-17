@@ -977,7 +977,9 @@ fn main() {
         // Calculate the hash of the block header
         //let block_hash = calculate_hash(serialized_block_header.clone());
         let  block_hash =  double_sha256(serialized_block_header.clone());
-        let block_hash = hex::encode(block_hash);
+        let mut block_h = block_hash;
+        block_h.reverse();
+        let block_hash = hex::encode(block_h);
 
 
         // Check if the hash meets the target
