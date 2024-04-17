@@ -139,7 +139,7 @@ fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
 fn construct_block_header(nonce: u32, merkle_root: String) -> BlockHeader {
 
     let mut block_header = BlockHeader{
-        version: 2,
+        version: 7,
         prev_block_hash: "".to_string(),
         merkle_root: merkle_root.to_string(),
         timestamp: 0,
