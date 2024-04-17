@@ -958,12 +958,12 @@ fn main() {
     // coinbase txid
     let coinbase_txid = double_sha256(cd_tx_bytes);
     // Reverse the bytes
-    let mut coinbase_txid_le = coinbase_txid.to_vec();
+    let mut coinbase_txid_le = coinbase_txid;
     coinbase_txid_le.reverse();
     let coinbase_txid = hex::encode(coinbase_txid_le);
 
     // Insert the coinbase txid at the beginning of the valid_txids vector
-    sorted_txids.insert(0, hex::encode(coinbase_txid));
+    sorted_txids.insert(0, coinbase_txid);
 
     let merkle_root = get_merkle_root(sorted_txids.clone());
 
