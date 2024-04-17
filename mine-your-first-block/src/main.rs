@@ -597,7 +597,7 @@ fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Strin
 
         // Get ScriptSig and ScriptPubKey
         // Should i just do this from the ScriptSig_asm???
-        let  scriptsig = &vin.scriptsig;
+        let scriptsig = &vin.scriptsig;
         let script_pub_key = &vin.prevout.scriptpubkey_asm.clone();
 
         let (signature, pubkey) = get_signature_and_publickey_from_scriptsig(scriptsig)
@@ -708,15 +708,22 @@ fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Strin
     }
 
     //////
-    let serialized_validtx = serialized_tx_for_message.as_bytes();
-    let txid: [u8; 32] = double_sha256(serialized_validtx.to_vec());
-    let txid_reversed = txid.iter().rev().cloned().collect::<Vec<u8>>();
-    let txid_hex = hex::encode(txid_reversed);
+    // let serialized_validtx = serialized_tx_for_message.as_bytes();
+    // let txid: [u8; 32] = double_sha256(serialized_validtx.to_vec());
+    // let txid_reversed = txid.iter().rev().cloned().collect::<Vec<u8>>();
+    // let txid_hex = hex::encode(txid_reversed);
+
+    let serialized_validtx = serialize_tx(transaction);
+    let tx_bytes = hex::decode(serialized_validtx).unwrap();
+    let txid_be = double_sha256(tx_bytes);
+    let mut txid_le = txid_be;
+    txid_le.reverse();
+    let txid = hex::encode(txid_le);
 
     //Ok((true, hex::encode(txid)))
 
     // Ok((true, hex::encode(txid_hex)))
-    Ok((true, txid_hex))
+    Ok((true, txid))
 }
 
 /// This function will remove dust transactions from a transaction
@@ -895,9 +902,12 @@ fn main() {
     // let tx = "../mempool/0a8b21af1cfcc26774df1f513a72cd362a14f5a598ec39d915323078efb5a240.json";
     // let deserialized_tx = deserialize_tx(tx);
     // let serialized_tx = serialize_tx(&deserialized_tx);
-    // let txid = double_sha256(serialized_tx.as_bytes().to_vec());
     // println!("SerializedTX: {}", serialized_tx);
-    // println!("TXID: {:?}", hex::encode(txid));
+    // let tx_data  = hex::decode(serialized_tx).unwrap();
+    // let txid = double_sha256(tx_data);
+    // println!("TXID: {:?}", hex::encode(&txid));
+
+
 
 
 
@@ -916,8 +926,7 @@ fn main() {
     // Initializing block weight
     let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
     let mut total_weight = 0u64;
-    //let max_block_weight = 4000000u64;
-    let max_block_weight = 500u64;
+    let max_block_weight = 4000000u64;
     let mut total_fees = 0u64;
 
     let valid_tx_clone =  valid_tx.clone();
@@ -983,7 +992,6 @@ fn main() {
             for txid in &sorted_txids {
                 append_to_file("../output.txt", txid).unwrap();
             }
-            append_to_file("../output.txt", "4eda2b12862c3aff56323d76a33f0739c655249305ad68a49d73afd8b4ee6a89").unwrap();
             println!("Success, the block met the target difficulty!");
             break;
         } else {
