@@ -953,12 +953,13 @@ fn main() {
     // Generate coinbase tx
     let coinbase_tx = create_coinbase_tx(total_fees);
     let serialized_cb_tx = serialize_tx(&coinbase_tx);
+    println!("Coinbase TX: {}", serialized_cb_tx);
     let cd_tx_bytes = hex::decode(serialized_cb_tx.clone()).unwrap();
 
     // coinbase txid
     let coinbase_txid = double_sha256(cd_tx_bytes);
     // Reverse the bytes
-    let mut coinbase_txid_le = coinbase_txid;
+    let mut coinbase_txid_le = coinbase_txid.to_vec();
     coinbase_txid_le.reverse();
     let coinbase_txid = hex::encode(coinbase_txid_le);
 
@@ -989,10 +990,10 @@ fn main() {
             append_to_file("../output.txt", &serialized_cb_tx).unwrap();
 
             // to test block weight
-            let half_txid = sorted_txids.len() /2;
+            //let half_txid = sorted_txids.len() /2;
 
             // Add the txids to the block
-            for txid in &sorted_txids[0..half_txid] {
+            for txid in &sorted_txids {
                 append_to_file("../output.txt", txid).unwrap();
             }
             println!("Success, the block met the target difficulty!");
