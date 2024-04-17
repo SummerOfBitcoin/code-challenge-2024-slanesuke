@@ -986,10 +986,10 @@ fn main() {
             append_to_file("../output.txt", &serialized_cb_tx).unwrap();
 
             // to test block weight
-            // let half_txid = sorted_txids.len() /2;
+            let half_txid = sorted_txids.len() /2;
 
             // Add the txids to the block
-            for txid in &sorted_txids {
+            for txid in &sorted_txids[0..half_txid] {
                 append_to_file("../output.txt", txid).unwrap();
             }
             println!("Success, the block met the target difficulty!");
