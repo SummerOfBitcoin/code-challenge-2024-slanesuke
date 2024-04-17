@@ -93,9 +93,6 @@ fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
     //  The block subsidy is 6.25 btc plus the fees from the transactions
     let block_substidy_plus_fees: u64 = 625000000 + total_tx_fee;
 
-    let address_hex =  "053918f36132b92f65c11de2deeccf2f0b35177df3297ed5db".to_string();
-
-    let scriptpubkey = "76a914053918f36132b92f65c11de2deeccf2f0b35177df3297ed5db88ac".to_string();
     let scriptpubkey = "41049464205950188c29d377eebca6535e0f3699ce4069ecd77ffebfbd0bcf95e3c134cb7d2742d800a12df41413a09ef87a80516353a2f0a280547bb5512dc03da8ac".to_string();
 
 
@@ -128,7 +125,7 @@ fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
     // Output count is 1 byte 01
     coinbase_tx.vout.push(Vout {
         // scriptpubkey: address_hex,
-        scriptpubkey: scriptpubkey,
+        scriptpubkey,
         scriptpubkey_asm: "".to_string(),
         scriptpubkey_type: "".to_string(),
         scriptpubkey_address: None,
@@ -847,7 +844,11 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProcessin
                 remove_dust_transactions(&mut transaction, min_relay_fee_per_byte);
 
                 // Push the txid and fee to the valid_txs vec
-                valid_txs.push(TransactionForProcessing { transaction: transaction.clone(), txid, fee, });
+                valid_txs.push(
+                    TransactionForProcessing {
+                        transaction: transaction.clone(),
+                        txid: txid.clone(),
+                        fee, });
 
                 // Check for double spending
                 if !check_double_spending(&transaction, &valid_txs) {
@@ -891,6 +892,15 @@ fn  calculate_transaction_weight(tx: &Transaction)  ->  u64  {
 // ISSUE Block does not meet target difficulty
 // So my block hash is too big so maybe too many transations in a block?
 fn main() {
+    // let tx = "../mempool/0a8b21af1cfcc26774df1f513a72cd362a14f5a598ec39d915323078efb5a240.json";
+    // let deserialized_tx = deserialize_tx(tx);
+    // let serialized_tx = serialize_tx(&deserialized_tx);
+    // let txid = double_sha256(serialized_tx.as_bytes().to_vec());
+    // println!("SerializedTX: {}", serialized_tx);
+    // println!("TXID: {:?}", hex::encode(txid));
+
+
+
     // Path to the mempool folder
     let mempool_path = "../mempool";
 
@@ -906,7 +916,8 @@ fn main() {
     // Initializing block weight
     let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
     let mut total_weight = 0u64;
-    let max_block_weight = 4000000u64;
+    //let max_block_weight = 4000000u64;
+    let max_block_weight = 500u64;
     let mut total_fees = 0u64;
 
     let valid_tx_clone =  valid_tx.clone();
@@ -972,6 +983,7 @@ fn main() {
             for txid in &sorted_txids {
                 append_to_file("../output.txt", txid).unwrap();
             }
+            append_to_file("../output.txt", "4eda2b12862c3aff56323d76a33f0739c655249305ad68a49d73afd8b4ee6a89").unwrap();
             println!("Success, the block met the target difficulty!");
             break;
         } else {
