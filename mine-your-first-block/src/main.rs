@@ -139,7 +139,7 @@ fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
 fn construct_block_header(nonce: u32, merkle_root: String) -> BlockHeader {
 
     let mut block_header = BlockHeader{
-        version: 2,
+        version: 0x20000000,
         prev_block_hash: "".to_string(),
         merkle_root: merkle_root.to_string(),
         timestamp: 0,
@@ -974,9 +974,11 @@ fn main() {
 
         let serialized_block_header = serialize_block_header(&block_header);
 
+
         // Calculate the hash of the block header
         //let block_hash = calculate_hash(serialized_block_header.clone());
         let  block_hash =  double_sha256(serialized_block_header.clone());
+        // I reversed the block hash and it worked soooo ???
         let mut block_h = block_hash;
         block_h.reverse();
         let block_hash = hex::encode(block_h);
