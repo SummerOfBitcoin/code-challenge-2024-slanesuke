@@ -585,7 +585,7 @@ fn get_tx_readyfor_signing_legacy(transaction : &mut Transaction) -> Transaction
 }
 
 /// Function to get segwit tx ready for signing
-fn get_tx_readyfor_signing_segwit(transaction: &mut Transaction) -> Transaction {
+fn get_tx_readyfor_signing_segwit(transaction: &mut Transaction, vin_index: usize, pubkey_hash: &str)  {
     let mut tx = transaction.clone();
 
 
@@ -595,17 +595,76 @@ fn get_tx_readyfor_signing_segwit(transaction: &mut Transaction) -> Transaction 
 
     // Serialze and hash txid+vout for each vin
     let mut input_hash = String::new();
+    let mut sequences_hash = String::new();
+
     for vin in tx.vin.iter() {
         let txid  = vin.txid.clone();
         let vout = format!("{:08x}", vin.vout);
         input_hash.push_str(&format!("{}{}", txid, vout));
+
+        //sequence
+        let sequence = format!("{:08x}", vin.sequence);
+        sequences_hash.push_str(&sequence);
     }
+
     let input_hash = double_sha256(hex::decode(input_hash).unwrap());
+    let sequences_hash = double_sha256(hex::decode(sequences_hash).unwrap());
 
-    // Serialize and hash the sequence for each vin
+    //  Serialize the txid+vout for the specific input
+    let vin = &tx.vin[vin_index];
+    let txid = vin.txid.clone();
+    let vout = format!("{:08x}", vin.vout);
+    let input = format!("{}{}", txid, vout);
+    let input = double_sha256(hex::decode(input).unwrap());
+
+    // Create a scriptcode for the input being signed
+    let scriptcode = format!("1976a914{}88ac", pubkey_hash);
+
+    // Get input amount in sats
+    let input_amount = vin.prevout.value;
+    let amount_le = input_amount.to_le_bytes();
+
+    // Sequence for input we sign
+    let sequence = format!("{:08x}", vin.sequence);
+
+    // Serialize and hash all the output fields
+    // hash256(amount+scriptpubkeysize+scriptpubkey)
+    // I have a feeling the amount or some field here is wrong
+    let mut output_hash = String::new();
+    for vout in tx.vout.iter() {
+        let amount = vout.value;
+        let amount_le = amount.to_le_bytes();
+        let scriptpubkey_size = vout.scriptpubkey.len() / 2;
+        let scriptpubkey_size_le = scriptpubkey_size.to_le_bytes();
+        let scriptpubkey = vout.scriptpubkey.clone();
+        output_hash.push_str(format!("{}{}{}", hex::encode(amount_le), hex::encode(scriptpubkey_size_le), scriptpubkey));
+    }
+    let output_hash = double_sha256(hex::decode(output_hash).unwrap());
+
+    // Locktime
+    let locktime = format!("{:08x}", tx.locktime);
+
+    // preimage or message to be signed
+    // Assuming all the variables are already defined and have the correct values
+    let preimage = format!("{}{}{}{}{}{}{}{}{}",
+                           version,
+                           hex::encode(input_hash),
+                           hex::encode(sequences_hash),
+                           hex::encode(input),
+                           scriptcode,
+                           hex::encode(amount_le),
+                           sequence,
+                           hex::encode(output_hash),
+                           locktime
+    );
+
+    // Need to add the sighash type to the preimage
+
+    // // Now you can hash the preimage
+    // let preimage_hash = double_sha256(hex::decode(preimage).unwrap());
 
 
-    tx
+
 }
 
 /// This function will validate P2WPKH transactions
@@ -623,6 +682,7 @@ fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Stri
     for (i, vin) in transaction.vin.iter().enumerate() {
         stack.clear();
 
+
         let witness = vin.witness.clone().ok_or("Witness data not found")?;
         let signature = hex::decode(witness[0].clone())?;
         let pubkey= hex::decode(witness[1].clone())?;
@@ -633,6 +693,15 @@ fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Stri
         let script_pubkey = vin.prevout.scriptpubkey.clone();
         let parts: Vec<&str> = script_pubkey.split_whitespace().collect();
         let pubkey_hash = parts.last().unwrap_or(&"");
+
+        // message to be signed
+        // let mut tx_for_signing = transaction.clone();
+        // tx_for_signing.vin = vec![vin.clone()];
+        // I may not even need to pass in the vin index idk
+        let message_tx = get_tx_readyfor_signing_segwit(&mut transaction.clone(), vin[i], pubkey_hash.clone());
+
+
+
         // Now it execute like a p2pkh locking script where the pubkeyhah is pushed after ophash160
         let script_pubkey_asm = format!("OP_DUP OP_HASH160 OP_PUSHBYTES_20 {} OP_EQUALVERIFY OP_CHECKSIG", pubkey_hash);
 
