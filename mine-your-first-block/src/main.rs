@@ -593,21 +593,28 @@ fn get_segwit_tx_message(
     let mut tx = transaction.clone();
 
 
-    // let version = tx.version.to_le_bytes();
-    // let version_hex = hex::encode(version);
-    let version = format!("{:08x}", tx.version);
+    let version = tx.version.to_le_bytes();
+    let version = hex::encode(version);
 
     // Serialze and hash txid+vout for each vin
     let mut input_hash = String::new();
     let mut sequences_hash = String::new();
 
+    // may need to reverse the byte order of txid
+
     for vin in tx.vin.iter() {
-        let txid  = vin.txid.clone();
-        let vout = format!("{:08x}", vin.vout);
+        //let txid  = vin.txid.clone();
+        let txid_bytes = hex::decode(vin.txid.clone()).unwrap();
+        let reversed_txid_bytes: Vec<u8> = txid_bytes.into_iter().rev().collect();
+        let txid = hex::encode(reversed_txid_bytes);
+
+        let vout = vin.vout.to_le_bytes();
+        let vout = hex::encode(vout);
         input_hash.push_str(&format!("{}{}", txid, vout));
 
         //sequence
-        let sequence = format!("{:08x}", vin.sequence);
+        let sequence = vin.sequence.to_le_bytes();
+        let sequence = hex::encode(sequence);
         sequences_hash.push_str(&sequence);
     }
 
@@ -616,8 +623,13 @@ fn get_segwit_tx_message(
 
     //  Serialize the txid+vout for the specific input
     let vin = &tx.vin[vin_index];
-    let txid = vin.txid.clone();
-    let vout = format!("{:08x}", vin.vout);
+
+    let txid_bytes = hex::decode(vin.txid.clone()).unwrap();
+    let reversed_txid_bytes: Vec<u8> = txid_bytes.into_iter().rev().collect();
+    let txid = hex::encode(reversed_txid_bytes);
+
+    let vout = vin.vout.to_le_bytes();
+    let vout = hex::encode(vout);
     let input = format!("{}{}", txid, vout);
     let input = double_sha256(hex::decode(input).unwrap());
 
@@ -627,9 +639,11 @@ fn get_segwit_tx_message(
     // Get input amount in sats
     let input_amount = vin.prevout.value;
     let amount_le = input_amount.to_le_bytes();
+    let amount_le = hex::encode(amount_le);
 
     // Sequence for input we sign
-    let sequence = format!("{:08x}", vin.sequence);
+    let sequence = vin.sequence.to_le_bytes();
+    let sequence= hex::encode(sequence);
 
     // Serialize and hash all the output fields
     // hash256(amount+scriptpubkeysize+scriptpubkey)
@@ -638,15 +652,26 @@ fn get_segwit_tx_message(
     for vout in tx.vout.iter() {
         let amount = vout.value;
         let amount_le = amount.to_le_bytes();
+        let amount_le = hex::encode(amount_le);
+
+
+        // For some reason i get trailing zeros after the compact size so i had to remove them
         let scriptpubkey_size = vout.scriptpubkey.len() / 2;
-        let scriptpubkey_size_le = scriptpubkey_size.to_le_bytes();
+        let mut scriptpubkey_size_bytes = (scriptpubkey_size as u64).to_le_bytes().to_vec();
+        if let Some(last_non_zero_position) = scriptpubkey_size_bytes.iter().rposition(|&x| x != 0) {
+            scriptpubkey_size_bytes.truncate(last_non_zero_position + 1);
+        }
+        let scriptpubkey_size_hex = hex::encode(&scriptpubkey_size_bytes);
+
         let scriptpubkey = vout.scriptpubkey.clone();
-        output_hash.push_str(format!("{}{}{}", hex::encode(amount_le), hex::encode(scriptpubkey_size_le), scriptpubkey));
+
+        output_hash.push_str(&format!("{}{}{}", amount_le, scriptpubkey_size_hex, scriptpubkey));
     }
     let output_hash = double_sha256(hex::decode(output_hash).unwrap());
 
     // Locktime
-    let locktime = format!("{:08x}", tx.locktime);
+    let locktime = tx.locktime.to_le_bytes();
+    let locktime = hex::encode(locktime);
 
     // Need to add the sighash type to the preimage
     let sighash_type_u32 = u32::from_le(sighash_type as u32);
@@ -664,8 +689,9 @@ fn get_segwit_tx_message(
                            sequence,
                            hex::encode(output_hash),
                            locktime,
-                           formatted_sighash;
+                           formatted_sighash,
     );
+    println!("Preimage:\n {}", preimage);
 
     // get the message
     let message = double_sha256(hex::decode(preimage).unwrap());
@@ -699,14 +725,16 @@ fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Stri
         stack.push(pubkey);
 
         // Get the pubkey hash from script_pubkey_asm
-        let script_pubkey = vin.prevout.scriptpubkey.clone();
+        let script_pubkey = vin.prevout.scriptpubkey_asm.clone();
         let parts: Vec<&str> = script_pubkey.split_whitespace().collect();
-        let pubkey_hash = parts.last().unwrap_or(&"");
+        let pubkey_hash = parts.last().unwrap();
+
+
 
         // Message hash
         let message_hash = get_segwit_tx_message(
             &mut transaction.clone(),
-            vin[i],
+            i,
             pubkey_hash.clone(),
             sighash_type.clone());
 
@@ -1140,105 +1168,117 @@ fn main() {
     // let tx_data  = hex::decode(serialized_tx).unwrap();
     // let txid = double_sha256(tx_data);
     // println!("TXID: {:?}", hex::encode(&txid));
-
-
-
-
-
-    // Path to the mempool folder
-    let mempool_path = "../mempool";
-
-    // Initialize nonce value;
-    let mut nonce = 0u32;
-
-    // Get the valid txs from the mempool
-    let valid_tx = process_mempool(mempool_path).unwrap();
-
-    // // Calculate the total fees and get the txids
-    // let mut valid_txids: Vec<String> = Vec::new();
-
-    // Initializing block weight
-    let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
-    let mut total_weight = 0u64;
-    let max_block_weight = 4000000u64;
-    let mut total_fees = 0u64;
-
-    let valid_tx_clone =  valid_tx.clone();
-
-    for tx in valid_tx_clone {
-        let tx_weight = calculate_transaction_weight(&tx.transaction);
-        if total_weight + tx_weight > max_block_weight {
-            // If the block weight exceeds the limit, break the loop
-            break;
+    let tx = "../mempool/0a7648a07076df6e59e904b7ad7195b83901e260fae0fa911c5377f6d47b87da.json";
+    let mut serde_tx = deserialize_tx(tx);
+    match p2wpkh_script_validation(&mut serde_tx) {
+        Ok((valid, wtxid)) => {
+            println!("Valid: {}, WTXID: {}\n", valid, wtxid);
         }
-        block_txs.push(tx.clone());
-        total_weight += tx_weight;
-        total_fees  += tx.fee; // Add the fee to the total fees
-    }
-
-    // Sort the transactions in descending order based on the fee
-    let sorted_valid_tx: Vec<_> = block_txs.iter()
-        .cloned().sorted_by(|a, b| b.fee.cmp(&a.fee)).
-        collect();
-
-    // Get txids from sorted valid txs
-    let mut sorted_txids : Vec<String> = sorted_valid_tx.iter().map(|tx| tx.txid.clone()).collect();
-
-    // Generate coinbase tx
-    let coinbase_tx = create_coinbase_tx(total_fees);
-    let serialized_cb_tx = serialize_tx(&coinbase_tx);
-    let cd_tx_bytes = hex::decode(serialized_cb_tx.clone()).unwrap();
-
-    // coinbase txid
-    let coinbase_txid = double_sha256(cd_tx_bytes);
-    // Reverse the bytes
-    let mut coinbase_txid_le = coinbase_txid.to_vec();
-    coinbase_txid_le.reverse();
-    let coinbase_txid = hex::encode(coinbase_txid_le);
-
-    // Insert the coinbase txid at the beginning of the valid_txids vector
-    sorted_txids.insert(0, coinbase_txid);
-
-    let merkle_root = get_merkle_root(sorted_txids.clone());
-
-    // Start Mining!
-    loop {
-        // Get the block header and serialize it
-        let block_header = construct_block_header(nonce, merkle_root.clone());
-
-        let serialized_block_header = serialize_block_header(&block_header);
-
-
-        // Calculate the hash of the block header
-        //let block_hash = calculate_hash(serialized_block_header.clone());
-        let  block_hash =  double_sha256(serialized_block_header.clone());
-        // I reversed the block hash and it worked soooo ???
-        let mut block_h = block_hash;
-        block_h.reverse();
-        let block_hash = hex::encode(block_h);
-
-
-        // Check if the hash meets the target
-        if hash_meets_difficulty_target(&block_hash) {
-
-            // Clear the output file
-            fs::write("../output.txt", "").unwrap();
-
-            // Write the block header, coinbase tx, and txids to the output file
-            append_to_file("../output.txt", &hex::encode(serialized_block_header)).unwrap();
-            append_to_file("../output.txt", &serialized_cb_tx).unwrap();
-
-            // to test block weight
-            //let half_txid = sorted_txids.len() /2;
-
-            // Add the txids to the block
-            for txid in &sorted_txids {
-                append_to_file("../output.txt", txid).unwrap();
-            }
-            println!("Success, the block met the target difficulty!");
-            break;
-        } else {
-            nonce += 1;
+        Err(e) => {
+            println!("\nError occured during validation of p2wpkh {}", e);
         }
     }
+
+
+
+    // UNCOMMENT TO TEST THE MEMPOOL
+
+    // // Path to the mempool folder
+    // let mempool_path = "../mempool";
+    //
+    // // Initialize nonce value;
+    // let mut nonce = 0u32;
+    //
+    // // Get the valid txs from the mempool
+    // let valid_tx = process_mempool(mempool_path).unwrap();
+    //
+    // // // Calculate the total fees and get the txids
+    // // let mut valid_txids: Vec<String> = Vec::new();
+    //
+    // // Initializing block weight
+    // let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
+    // let mut total_weight = 0u64;
+    // let max_block_weight = 4000000u64;
+    // let mut total_fees = 0u64;
+    //
+    // let valid_tx_clone =  valid_tx.clone();
+    //
+    // for tx in valid_tx_clone {
+    //     let tx_weight = calculate_transaction_weight(&tx.transaction);
+    //     if total_weight + tx_weight > max_block_weight {
+    //         // If the block weight exceeds the limit, break the loop
+    //         break;
+    //     }
+    //     block_txs.push(tx.clone());
+    //     total_weight += tx_weight;
+    //     total_fees  += tx.fee; // Add the fee to the total fees
+    // }
+    //
+    // // Sort the transactions in descending order based on the fee
+    // let sorted_valid_tx: Vec<_> = block_txs.iter()
+    //     .cloned().sorted_by(|a, b| b.fee.cmp(&a.fee)).
+    //     collect();
+    //
+    // // Get txids from sorted valid txs
+    // let mut sorted_txids : Vec<String> = sorted_valid_tx.iter().map(|tx| tx.txid.clone()).collect();
+    //
+    // // Generate coinbase tx
+    // let coinbase_tx = create_coinbase_tx(total_fees);
+    // let serialized_cb_tx = serialize_tx(&coinbase_tx);
+    // let cd_tx_bytes = hex::decode(serialized_cb_tx.clone()).unwrap();
+    //
+    // // coinbase txid
+    // let coinbase_txid = double_sha256(cd_tx_bytes);
+    // // Reverse the bytes
+    // let mut coinbase_txid_le = coinbase_txid.to_vec();
+    // coinbase_txid_le.reverse();
+    // let coinbase_txid = hex::encode(coinbase_txid_le);
+    //
+    // // Insert the coinbase txid at the beginning of the valid_txids vector
+    // sorted_txids.insert(0, coinbase_txid);
+    //
+    // let merkle_root = get_merkle_root(sorted_txids.clone());
+    //
+    // // Start Mining!
+    // loop {
+    //     // Get the block header and serialize it
+    //     let block_header = construct_block_header(nonce, merkle_root.clone());
+    //
+    //     let serialized_block_header = serialize_block_header(&block_header);
+    //
+    //
+    //     // Calculate the hash of the block header
+    //     //let block_hash = calculate_hash(serialized_block_header.clone());
+    //     let  block_hash =  double_sha256(serialized_block_header.clone());
+    //     // I reversed the block hash and it worked soooo ???
+    //     let mut block_h = block_hash;
+    //     block_h.reverse();
+    //     let block_hash = hex::encode(block_h);
+    //
+    //
+    //     // Check if the hash meets the target
+    //     if hash_meets_difficulty_target(&block_hash) {
+    //
+    //         // Clear the output file
+    //         fs::write("../output.txt", "").unwrap();
+    //
+    //         // Write the block header, coinbase tx, and txids to the output file
+    //         append_to_file("../output.txt", &hex::encode(serialized_block_header)).unwrap();
+    //         append_to_file("../output.txt", &serialized_cb_tx).unwrap();
+    //
+    //         // to test block weight
+    //         //let half_txid = sorted_txids.len() /2;
+    //
+    //         // Add the txids to the block
+    //         for txid in &sorted_txids {
+    //             append_to_file("../output.txt", txid).unwrap();
+    //         }
+    //         println!("Success, the block met the target difficulty!");
+    //         break;
+    //     } else {
+    //         nonce += 1;
+    //     }
+    // }
 }
+
+
