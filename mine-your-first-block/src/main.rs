@@ -584,8 +584,12 @@ fn get_tx_readyfor_signing_legacy(transaction : &mut Transaction) -> Transaction
     }
 }
 
-/// Function to get segwit tx ready for signing
-fn get_tx_readyfor_signing_segwit(transaction: &mut Transaction, vin_index: usize, pubkey_hash: &str)  {
+/// Function to get segwit message
+fn get_segwit_tx_message(
+    transaction: &mut Transaction,
+    vin_index: usize,
+    pubkey_hash: &str,
+    sighash_type: u8) ->  [u8; 32] {
     let mut tx = transaction.clone();
 
 
@@ -644,9 +648,13 @@ fn get_tx_readyfor_signing_segwit(transaction: &mut Transaction, vin_index: usiz
     // Locktime
     let locktime = format!("{:08x}", tx.locktime);
 
+    // Need to add the sighash type to the preimage
+    let sighash_type_u32 = u32::from_le(sighash_type as u32);
+    let formatted_sighash = format!("{:08x}", sighash_type_u32);
+
     // preimage or message to be signed
     // Assuming all the variables are already defined and have the correct values
-    let preimage = format!("{}{}{}{}{}{}{}{}{}",
+    let preimage = format!("{}{}{}{}{}{}{}{}{}{}",
                            version,
                            hex::encode(input_hash),
                            hex::encode(sequences_hash),
@@ -655,16 +663,13 @@ fn get_tx_readyfor_signing_segwit(transaction: &mut Transaction, vin_index: usiz
                            hex::encode(amount_le),
                            sequence,
                            hex::encode(output_hash),
-                           locktime
+                           locktime,
+                           formatted_sighash;
     );
 
-    // Need to add the sighash type to the preimage
-
-    // // Now you can hash the preimage
-    // let preimage_hash = double_sha256(hex::decode(preimage).unwrap());
-
-
-
+    // get the message
+    let message = double_sha256(hex::decode(preimage).unwrap());
+    message
 }
 
 /// This function will validate P2WPKH transactions
@@ -685,6 +690,10 @@ fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Stri
 
         let witness = vin.witness.clone().ok_or("Witness data not found")?;
         let signature = hex::decode(witness[0].clone())?;
+
+        // sighash type off sig
+        let sighash_type = signature[signature.len()-1];
+
         let pubkey= hex::decode(witness[1].clone())?;
         stack.push(signature);
         stack.push(pubkey);
@@ -694,11 +703,12 @@ fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Stri
         let parts: Vec<&str> = script_pubkey.split_whitespace().collect();
         let pubkey_hash = parts.last().unwrap_or(&"");
 
-        // message to be signed
-        // let mut tx_for_signing = transaction.clone();
-        // tx_for_signing.vin = vec![vin.clone()];
-        // I may not even need to pass in the vin index idk
-        let message_tx = get_tx_readyfor_signing_segwit(&mut transaction.clone(), vin[i], pubkey_hash.clone());
+        // Message hash
+        let message_hash = get_segwit_tx_message(
+            &mut transaction.clone(),
+            vin[i],
+            pubkey_hash.clone(),
+            sighash_type.clone());
 
 
 
@@ -754,7 +764,7 @@ fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Stri
                     let signature = stack.pop().unwrap();
 
 
-                    match verify_signature(signature.clone(), pubkey.clone(), message_in_bytes.clone()) {
+                    match verify_signature(signature.clone(), pubkey.clone(), message_hash.to_vec()) {
                         Ok(true) => {
                             // If the signature is valid, push a truthy value onto the stack to indicate success
                             stack.push(vec![1]);
