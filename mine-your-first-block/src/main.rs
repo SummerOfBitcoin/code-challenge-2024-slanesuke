@@ -103,6 +103,9 @@ fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
     // version is 4 bytes lil endian 01000000
     coinbase_tx.version = 1;
 
+    // witness data
+    let witness_reserved_value = "0000000000000000000000000000000000000000000000000000000000000000";
+
     let txid= "0000000000000000000000000000000000000000000000000000000000000000";
     // input count is 1 byte 01
     coinbase_tx.vin.push(Vin {
@@ -117,7 +120,7 @@ fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
         },
         scriptsig: block_scriptsig,
         scriptsig_asm: "".to_string(),
-        witness: None,
+        witness: Some(vec![witness_reserved_value.to_string()]),
         is_coinbase: true,
         sequence: 0xffffffff,
     });
@@ -360,117 +363,117 @@ fn serialize_tx(transaction: &Transaction) -> String {
 }
 
 
-// /// This function will serialize a segwit transaction into a string of hex bytes
-// fn serialized_segwit_tx(transaction: &Transaction) -> String {
-//     let mut serialized_tx = String::new();
-//
-//     let version = transaction.version.to_le_bytes();
-//     serialized_tx.push_str(&hex::encode(version));
-//
-//     // In a segwit transaction I have to add a marker and a flag
-//     // Marker is always 00 and flag is always 01
-//     serialized_tx.push_str("00");
-//     serialized_tx.push_str("01");
-//
-//     // Serialize vin count and push the numb of inputs
-//     let vin_count = transaction.vin.len() as u64;
-//     serialized_tx.push_str(&format!("{:02x}", vin_count));
-//
-//
-//     for vin in &transaction.vin {
-//         // Serialize txid and push
-//         serialized_tx.push_str(&vin.txid);
-//
-//         // Serialize vout and push
-//         let vout = &vin.vout.to_le_bytes();
-//         let vout_hex = hex::encode(vout);
-//         serialized_tx.push_str(&vout_hex);
-//
-//         // If its strictly a segwit tx, scriptsig field is empty so push zero
-//         if vin.scriptsig.is_empty() {
-//             serialized_tx.push_str("00");
-//         } else {
-//             // Otherwise it's a tx with both legacy and segwit inputs so I have to add the scriptsig
-//             // Coppied from the legacy serialize_tx function
-//             // Serialize scriptSig size I kept getting trailing zeros after my compactsize hex
-//             let scriptsig_size = vin.scriptsig.len() / 2;
-//
-//             // So I had to do this to remove the trailing zeros
-//             // It basically converts the u64 to bytes then to a vec then removes the trailing zeros
-//             let mut scriptsig_size_bytes = (scriptsig_size as u64).to_le_bytes().to_vec();
-//
-//             if let Some(last_non_zero_position) = scriptsig_size_bytes.iter().rposition(|&x| x != 0) {
-//                 scriptsig_size_bytes.truncate(last_non_zero_position + 1);
-//             }
-//
-//             let scriptsig_size_hex = hex::encode(&scriptsig_size_bytes);
-//             serialized_tx.push_str(&scriptsig_size_hex);
-//
-//             // Now push scriptsig itself
-//             serialized_tx.push_str(&vin.scriptsig);
-//         }
-//
-//         let sequence = &vin.sequence.to_le_bytes();
-//         let sequence_hex = hex::encode(sequence);
-//         serialized_tx.push_str(&sequence_hex);
-//
-//     }
-//
-//     let vout_count = transaction.vout.len() as u64;
-//     serialized_tx.push_str(&format!("{:02x}", vout_count));
-//
-//
-//     // Serialize vout count and push the numb of outputs
-//     // I copied it from the legacy serialize_tx function
-//     for vout in &transaction.vout {
-//
-//         // Next push the amount of satoshis
-//         let value = &vout.value.to_le_bytes();
-//         serialized_tx.push_str(&hex::encode(value));
-//
-//         // Now push the scriptpubkey cpmpact size
-//
-//         // Just like above I had to remove the trailing zeros}
-//         let scriptpubkey_size = vout.scriptpubkey.len() / 2;
-//         let mut scriptpubkey_size_bytes = (scriptpubkey_size as u64).to_le_bytes().to_vec();
-//         if let Some(last_non_zero_position) = scriptpubkey_size_bytes.iter().rposition(|&x| x != 0) {
-//             scriptpubkey_size_bytes.truncate(last_non_zero_position + 1);
-//         }
-//         let scriptpubkey_size_hex = hex::encode(&scriptpubkey_size_bytes);
-//         serialized_tx.push_str(&scriptpubkey_size_hex);
-//         serialized_tx.push_str(&vout.scriptpubkey);
-//     }
-//
-//     // Now time for the witness fields
-//     for vin in &transaction.vin {
-//         if let Some(witness) = &vin.witness {
-//             // Serialize the number of stack items for the witness!
-//             let stack_items = witness.len() as u64;
-//             serialized_tx.push_str(&format!("{:02x}", stack_items));
-//
-//             for witness_feild in witness {
-//                 // Get compact size
-//                 // Why does script_sig have trailing zeros but none here in compact size
-//                 let compact_size = witness_feild.len() / 2;
-//                 serialized_tx.push_str(&format!("{:02x}", compact_size));
-//                 serialized_tx.push_str(witness_feild);
-//
-//             }
-//         }
-//     }
-//
-//     // Finally add the locktime
-//     let lock = &transaction.locktime.to_le_bytes();
-//     let lock_hex = hex::encode(lock);
-//     serialized_tx.push_str(&lock_hex);
-//
-//     // Unsure if segwit tx's need a sighash type so will keep it commented for now
-//     // if transaction.sighash.is_some() {
-//     //         serialized_tx.push_str(&<std::option::Option<std::string::String> as Clone>::clone(&transaction.sighash).unwrap());
-//     //     }
-//
-//      serialized_tx
-// }
+/// This function will serialize a segwit transaction into a string of hex bytes
+fn serialized_segwit_tx(transaction: &Transaction) -> String {
+    let mut serialized_tx = String::new();
+
+    let version = transaction.version.to_le_bytes();
+    serialized_tx.push_str(&hex::encode(version));
+
+    // In a segwit transaction I have to add a marker and a flag
+    // Marker is always 00 and flag is always 01
+    serialized_tx.push_str("00");
+    serialized_tx.push_str("01");
+
+    // Serialize vin count and push the numb of inputs
+    let vin_count = transaction.vin.len() as u64;
+    serialized_tx.push_str(&format!("{:02x}", vin_count));
+
+
+    for vin in &transaction.vin {
+        // Serialize txid and push
+        serialized_tx.push_str(&vin.txid);
+
+        // Serialize vout and push
+        let vout = &vin.vout.to_le_bytes();
+        let vout_hex = hex::encode(vout);
+        serialized_tx.push_str(&vout_hex);
+
+        // If its strictly a segwit tx, scriptsig field is empty so push zero
+        if vin.scriptsig.is_empty() {
+            serialized_tx.push_str("00");
+        } else {
+            // Otherwise it's a tx with both legacy and segwit inputs so I have to add the scriptsig
+            // Coppied from the legacy serialize_tx function
+            // Serialize scriptSig size I kept getting trailing zeros after my compactsize hex
+            let scriptsig_size = vin.scriptsig.len() / 2;
+
+            // So I had to do this to remove the trailing zeros
+            // It basically converts the u64 to bytes then to a vec then removes the trailing zeros
+            let mut scriptsig_size_bytes = (scriptsig_size as u64).to_le_bytes().to_vec();
+
+            if let Some(last_non_zero_position) = scriptsig_size_bytes.iter().rposition(|&x| x != 0) {
+                scriptsig_size_bytes.truncate(last_non_zero_position + 1);
+            }
+
+            let scriptsig_size_hex = hex::encode(&scriptsig_size_bytes);
+            serialized_tx.push_str(&scriptsig_size_hex);
+
+            // Now push scriptsig itself
+            serialized_tx.push_str(&vin.scriptsig);
+        }
+
+        let sequence = &vin.sequence.to_le_bytes();
+        let sequence_hex = hex::encode(sequence);
+        serialized_tx.push_str(&sequence_hex);
+
+    }
+
+    let vout_count = transaction.vout.len() as u64;
+    serialized_tx.push_str(&format!("{:02x}", vout_count));
+
+
+    // Serialize vout count and push the numb of outputs
+    // I copied it from the legacy serialize_tx function
+    for vout in &transaction.vout {
+
+        // Next push the amount of satoshis
+        let value = &vout.value.to_le_bytes();
+        serialized_tx.push_str(&hex::encode(value));
+
+        // Now push the scriptpubkey cpmpact size
+
+        // Just like above I had to remove the trailing zeros}
+        let scriptpubkey_size = vout.scriptpubkey.len() / 2;
+        let mut scriptpubkey_size_bytes = (scriptpubkey_size as u64).to_le_bytes().to_vec();
+        if let Some(last_non_zero_position) = scriptpubkey_size_bytes.iter().rposition(|&x| x != 0) {
+            scriptpubkey_size_bytes.truncate(last_non_zero_position + 1);
+        }
+        let scriptpubkey_size_hex = hex::encode(&scriptpubkey_size_bytes);
+        serialized_tx.push_str(&scriptpubkey_size_hex);
+        serialized_tx.push_str(&vout.scriptpubkey);
+    }
+
+    // Now time for the witness fields
+    for vin in &transaction.vin {
+        if let Some(witness) = &vin.witness {
+            // Serialize the number of stack items for the witness!
+            let stack_items = witness.len() as u64;
+            serialized_tx.push_str(&format!("{:02x}", stack_items));
+
+            for witness_field in witness {
+                // Get compact size
+                // Why does script_sig have trailing zeros but none here in compact size
+                let compact_size = witness_field.len() / 2;
+                serialized_tx.push_str(&format!("{:02x}", compact_size));
+                serialized_tx.push_str(witness_field);
+
+            }
+        }
+    }
+
+    // Finally add the locktime
+    let lock = &transaction.locktime.to_le_bytes();
+    let lock_hex = hex::encode(lock);
+    serialized_tx.push_str(&lock_hex);
+
+    // Unsure if segwit tx's need a sighash type so will keep it commented for now
+    // if transaction.sighash.is_some() {
+    //         serialized_tx.push_str(&<std::option::Option<std::string::String> as Clone>::clone(&transaction.sighash).unwrap());
+    //     }
+
+     serialized_tx
+}
 
 /// This function will verify the signature of a transaction when passed into OP_CHECKSIG
 fn verify_signature(
@@ -579,6 +582,158 @@ fn get_tx_readyfor_signing_legacy(transaction : &mut Transaction) -> Transaction
         vout: transaction.vout.clone(),
         sighash: transaction.sighash.clone(),
     }
+}
+
+/// Function to get segwit tx ready for signing
+fn get_tx_readyfor_signing_segwit(transaction: &mut Transaction) -> Transaction {
+    let mut tx = transaction.clone();
+
+
+    // let version = tx.version.to_le_bytes();
+    // let version_hex = hex::encode(version);
+    let version = format!("{:08x}", tx.version);
+
+    // Serialze and hash txid+vout for each vin
+    let mut input_hash = String::new();
+    for vin in tx.vin.iter() {
+        let txid  = vin.txid.clone();
+        let vout = format!("{:08x}", vin.vout);
+        input_hash.push_str(&format!("{}{}", txid, vout));
+    }
+    let input_hash = double_sha256(hex::decode(input_hash).unwrap());
+
+    // Serialize and hash the sequence for each vin
+
+
+    tx
+}
+
+/// This function will validate P2WPKH transactions
+// should i start by checking the scriptpubkey type?
+// // if vin.prevout.scriptpubkey_type == "v0_p2wpkh" {
+//         //
+//         // }
+// Do i need to worry about bech32 addresses?
+fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, String), Box<dyn Error>> {
+    // Create a stack to hold the data
+    let mut stack: Vec<Vec<u8>> = Vec::new();
+
+    let mut serialized_tx = String::new();
+
+    for (i, vin) in transaction.vin.iter().enumerate() {
+        stack.clear();
+
+        let witness = vin.witness.clone().ok_or("Witness data not found")?;
+        let signature = hex::decode(witness[0].clone())?;
+        let pubkey= hex::decode(witness[1].clone())?;
+        stack.push(signature);
+        stack.push(pubkey);
+
+        // Get the pubkey hash from script_pubkey_asm
+        let script_pubkey = vin.prevout.scriptpubkey.clone();
+        let parts: Vec<&str> = script_pubkey.split_whitespace().collect();
+        let pubkey_hash = parts.last().unwrap_or(&"");
+        // Now it execute like a p2pkh locking script where the pubkeyhah is pushed after ophash160
+        let script_pubkey_asm = format!("OP_DUP OP_HASH160 OP_PUSHBYTES_20 {} OP_EQUALVERIFY OP_CHECKSIG", pubkey_hash);
+
+        for op in script_pubkey_asm.split_whitespace(){
+            match op {
+                "OP_DUP" => {
+                    // If the stack is empty return false
+                    // Otherwise clone the last item on the stack and push it to the stack
+                    if stack.last().is_none() {
+                        return Err(format!("Stack underflow in OP_DUP for input {}", i).into());
+                    }
+                    stack.push(stack.last().unwrap().clone());
+                }
+                "OP_HASH160" => {
+                    // If the stack is empty return false
+                    // Otherwise take the last item from the stack, hash it with sha256 then ripemd160
+                    // and push it to the stack
+                    if let Some(pubkey) = stack.pop() {
+                        let sha256_hash = sha256(pubkey);
+                        let ripemd160_hash = ripemd160(sha256_hash);
+                        stack.push(ripemd160_hash.clone());
+                    } else {
+                        return Err(format!("Stack underflow in OP_HASH160 for input {}", i).into());
+                    }
+                }
+                "OP_EQUALVERIFY" => {
+                    // if stack is less than 2 return false
+                    if stack.len() < 2 {
+                        return Err(format!("Stack underflow in OP_EQUALVERIFY for input {}", i).into());
+                    }
+                    // Otherwise pop the last two items from the stack and compare them
+                    // if they are not equal return false, if they are just continue
+                    let stack_item1 = stack.pop().unwrap();
+                    // unsure why but i diregard an extra item on the stack
+                    // then it compares the top two items
+                    let _stack_temp = stack.pop().unwrap();
+                    let stack_item2 = stack.pop().unwrap();
+                    if stack_item1 != stack_item2 {
+                        return Err(format!("Stackitem1: {} aND Stackitem 2: {} and Hash: {} .OP_EQUALVERIFY failed for input",hex::encode(stack_item1), hex::encode(stack_item2), i).into());
+                    }
+                }
+                "OP_CHECKSIG" => {
+                    // If the stack has less than two items return false
+                    if stack.len() < 2 {
+                        return Err(format!("Stack underflow in OP_CHECKSIG for input {}", i).into());
+                    }
+                    // otherwise pop the last two items from the stack (pubkey and signature)
+                    // and validate the signature
+                    let pubkey = stack.pop().unwrap();
+                    let signature = stack.pop().unwrap();
+
+
+                    match verify_signature(signature.clone(), pubkey.clone(), message_in_bytes.clone()) {
+                        Ok(true) => {
+                            // If the signature is valid, push a truthy value onto the stack to indicate success
+                            stack.push(vec![1]);
+                        },
+                        Ok(false) => {
+                            // The signature verification was successful but reported the signature as invalid
+                            let pubkey_hex = hex::encode(&pubkey);
+                            let signature_hex = hex::encode(&signature);
+                            return Err(format!(
+                                "Signature verification failed for input {}. The signature does not match the provided public key and message. PubKey: {}, Signature: {}",
+                                i, pubkey_hex, signature_hex
+                            ).into());
+                        },
+                        Err(e) => {
+                            // An error occurred during the signature verification process
+                            return Err(format!(
+                                "An error occurred while verifying the signature for input {}: {}",
+                                i, e
+                            ).into());
+                        }
+                    }
+
+
+                }
+                _ => {
+                    // If it's not an operator, it's an ordinary data (like sig or pubkey) and push it onto the stack
+                    // Verify !!!
+                    let data = hex::decode(op).unwrap_or_default(); // Convert hex string to bytes
+                    stack.push(data);
+                }
+            }
+        }
+        if stack.len() != 1 || stack.is_empty() {
+            return Err(format!("Final stack validation failed for input {}", i).into());
+        }
+
+    }
+
+    // May need to change this a bit...
+    let serialized_validtx = serialized_segwit_tx(transaction);
+    let tx_bytes = hex::decode(serialized_validtx).unwrap();
+    let txid_be = double_sha256(tx_bytes);
+    let mut txid_le = txid_be;
+    txid_le.reverse();
+    let wtxid = hex::encode(txid_le);
+
+
+    Ok((true, wtxid))
 }
 
 /// This function will validate a P2PKH transaction
