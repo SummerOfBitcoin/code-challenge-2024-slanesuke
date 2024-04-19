@@ -383,6 +383,14 @@ fn serialized_segwit_tx(transaction: &Transaction) -> String {
     for vin in &transaction.vin {
         // Serialize txid and push
         serialized_tx.push_str(&vin.txid);
+        // I believe the txid needs to be in reversed byte order
+        let txid_bytes = hex::decode(&vin.txid).unwrap();
+        // let reversed_txid_bytes: Vec<u8> = txid_bytes.into_iter().rev().collect();
+        // let reversed_txid = hex::encode(reversed_txid_bytes);
+        // serialized_tx.push_str(&reversed_txid);
+
+
+
 
         // Serialize vout and push
         let vout = &vin.vout.to_le_bytes();
@@ -584,42 +592,44 @@ fn get_tx_readyfor_signing_legacy(transaction : &mut Transaction) -> Transaction
     }
 }
 
+
 /// Function to get segwit message
 fn get_segwit_tx_message(
     transaction: &mut Transaction,
     vin_index: usize,
     pubkey_hash: &str,
-    sighash_type: u8) ->  [u8; 32] {
+    sighash_type: u8) ->  String {
     let mut tx = transaction.clone();
 
 
     let version = tx.version.to_le_bytes();
     let version = hex::encode(version);
+    println!("Version {}", version);
 
     // Serialze and hash txid+vout for each vin
     let mut input_hash = String::new();
-    let mut sequences_hash = String::new();
-
-    // may need to reverse the byte order of txid
+    let mut sequences_hash = Vec::new();
 
     for vin in tx.vin.iter() {
-        //let txid  = vin.txid.clone();
         let txid_bytes = hex::decode(vin.txid.clone()).unwrap();
         let reversed_txid_bytes: Vec<u8> = txid_bytes.into_iter().rev().collect();
         let txid = hex::encode(reversed_txid_bytes);
 
         let vout = vin.vout.to_le_bytes();
         let vout = hex::encode(vout);
+
         input_hash.push_str(&format!("{}{}", txid, vout));
 
         //sequence
         let sequence = vin.sequence.to_le_bytes();
-        let sequence = hex::encode(sequence);
-        sequences_hash.push_str(&sequence);
+        sequences_hash.extend_from_slice(&sequence);
     }
+    println!("THe input hash before hash is: {}", input_hash);
 
     let input_hash = double_sha256(hex::decode(input_hash).unwrap());
-    let sequences_hash = double_sha256(hex::decode(sequences_hash).unwrap());
+    let sequences_hash = double_sha256(sequences_hash);
+    println!("Input Hash: {}", hex::encode(input_hash));
+    println!("Sequence Hash: {}", hex::encode(sequences_hash));
 
     //  Serialize the txid+vout for the specific input
     let vin = &tx.vin[vin_index];
@@ -627,23 +637,35 @@ fn get_segwit_tx_message(
     let txid_bytes = hex::decode(vin.txid.clone()).unwrap();
     let reversed_txid_bytes: Vec<u8> = txid_bytes.into_iter().rev().collect();
     let txid = hex::encode(reversed_txid_bytes);
+    println!("Txid: {}", txid);
 
     let vout = vin.vout.to_le_bytes();
     let vout = hex::encode(vout);
+
+    println!("Vout: {}", vout);
+
     let input = format!("{}{}", txid, vout);
-    let input = double_sha256(hex::decode(input).unwrap());
+
+
+
+    println!("Input FOR TX I SIGN: {}", input);
+    // let input = double_sha256(hex::decode(input).unwrap());
+
 
     // Create a scriptcode for the input being signed
     let scriptcode = format!("1976a914{}88ac", pubkey_hash);
+    println!("Scriptcode: {}", scriptcode);
 
     // Get input amount in sats
     let input_amount = vin.prevout.value;
     let amount_le = input_amount.to_le_bytes();
     let amount_le = hex::encode(amount_le);
+    println!("Amount: {}", amount_le);
 
     // Sequence for input we sign
     let sequence = vin.sequence.to_le_bytes();
     let sequence= hex::encode(sequence);
+    println!("Sequence: {}", sequence);
 
     // Serialize and hash all the output fields
     // hash256(amount+scriptpubkeysize+scriptpubkey)
@@ -653,29 +675,31 @@ fn get_segwit_tx_message(
         let amount = vout.value;
         let amount_le = amount.to_le_bytes();
         let amount_le = hex::encode(amount_le);
+        println!("Amount: {}", amount_le);
 
 
         // For some reason i get trailing zeros after the compact size so i had to remove them
-        let scriptpubkey_size = vout.scriptpubkey.len() / 2;
-        let mut scriptpubkey_size_bytes = (scriptpubkey_size as u64).to_le_bytes().to_vec();
-        if let Some(last_non_zero_position) = scriptpubkey_size_bytes.iter().rposition(|&x| x != 0) {
-            scriptpubkey_size_bytes.truncate(last_non_zero_position + 1);
-        }
-        let scriptpubkey_size_hex = hex::encode(&scriptpubkey_size_bytes);
+        let scriptpubkey_size = vout.scriptpubkey.len();
+        let scriptpubkey_size_hex = compact_size(scriptpubkey_size);
+        println!("Scriptpubkey Size: {}", scriptpubkey_size_hex);
 
         let scriptpubkey = vout.scriptpubkey.clone();
+        println!("Scriptpubkey: {}", scriptpubkey);
 
         output_hash.push_str(&format!("{}{}{}", amount_le, scriptpubkey_size_hex, scriptpubkey));
     }
+    println!("The output hash before hash is: {}", output_hash);
     let output_hash = double_sha256(hex::decode(output_hash).unwrap());
 
     // Locktime
     let locktime = tx.locktime.to_le_bytes();
     let locktime = hex::encode(locktime);
+    println!("Locktime: {}", locktime);
 
     // Need to add the sighash type to the preimage
     let sighash_type_u32 = u32::from_le(sighash_type as u32);
-    let formatted_sighash = format!("{:08x}", sighash_type_u32);
+    let formatted_sighash = hex::encode(sighash_type_u32.to_le_bytes());
+    println!("Sighash Type: {}", formatted_sighash);
 
     // preimage or message to be signed
     // Assuming all the variables are already defined and have the correct values
@@ -683,7 +707,7 @@ fn get_segwit_tx_message(
                            version,
                            hex::encode(input_hash),
                            hex::encode(sequences_hash),
-                           hex::encode(input),
+                           input,
                            scriptcode,
                            hex::encode(amount_le),
                            sequence,
@@ -693,9 +717,16 @@ fn get_segwit_tx_message(
     );
     println!("Preimage:\n {}", preimage);
 
-    // get the message
-    let message = double_sha256(hex::decode(preimage).unwrap());
-    message
+    preimage
+}
+
+fn compact_size(n:usize)  -> String {
+    match n {
+        0..=0xfc => format!("{:02x}", n),
+        0xfd..=0xffff => format!("fd{:04x}", n),
+        0x10000..=0xffffffff => format!("fe{:08x}", n),
+        _ => format!("ff{:016x}", n),
+    }
 }
 
 /// This function will validate P2WPKH transactions
@@ -708,7 +739,7 @@ fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Stri
     // Create a stack to hold the data
     let mut stack: Vec<Vec<u8>> = Vec::new();
 
-    let mut serialized_tx = String::new();
+    let serialized_tx = String::new();
 
     for (i, vin) in transaction.vin.iter().enumerate() {
         stack.clear();
@@ -732,11 +763,13 @@ fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Stri
 
 
         // Message hash
-        let message_hash = get_segwit_tx_message(
+       let message_hash = get_segwit_tx_message(
             &mut transaction.clone(),
             i,
             pubkey_hash.clone(),
             sighash_type.clone());
+        let message_in_bytes = hex::decode(message_hash).unwrap();
+
 
 
 
@@ -792,7 +825,7 @@ fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Stri
                     let signature = stack.pop().unwrap();
 
 
-                    match verify_signature(signature.clone(), pubkey.clone(), message_hash.to_vec()) {
+                    match verify_signature(signature.clone(), pubkey.clone(), message_in_bytes.clone()) {
                         Ok(true) => {
                             // If the signature is valid, push a truthy value onto the stack to indicate success
                             stack.push(vec![1]);
@@ -1168,7 +1201,9 @@ fn main() {
     // let tx_data  = hex::decode(serialized_tx).unwrap();
     // let txid = double_sha256(tx_data);
     // println!("TXID: {:?}", hex::encode(&txid));
-    let tx = "../mempool/0a7648a07076df6e59e904b7ad7195b83901e260fae0fa911c5377f6d47b87da.json";
+    //let tx = "../mempool/0a7648a07076df6e59e904b7ad7195b83901e260fae0fa911c5377f6d47b87da.json";
+    let tx = "../mempool/0bdaac3b4e6bfcdcdcd8cbb35944c21197d19d10d9633f1d7452089b575d4f4a.json";
+    //let tx = "../mempool/0d2f99f03e061c32a9dadd57cec90fc72535c5280e0e4c2b705366d6e5fd53c2.json";
     let mut serde_tx = deserialize_tx(tx);
     match p2wpkh_script_validation(&mut serde_tx) {
         Ok((valid, wtxid)) => {
