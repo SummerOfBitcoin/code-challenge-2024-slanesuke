@@ -33,7 +33,9 @@ struct Transaction {
 struct TransactionForProcessing {
     transaction: Transaction,
     txid: String,
+    wtxid: Option<String>,
     fee: u64,
+    is_p2wpkh: bool,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -76,7 +78,7 @@ struct BlockHeader {
 }
 
 /// This function will return the coinbase transaction
-fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
+fn create_coinbase_tx(total_tx_fee: u64, witness_root: String) -> Transaction {
     let mut coinbase_tx = Transaction {
         version: 0,
         locktime: 0,
@@ -134,6 +136,26 @@ fn create_coinbase_tx(total_tx_fee: u64) -> Transaction {
         scriptpubkey_address: None,
         value: block_substidy_plus_fees,
     });
+
+
+    // Output count 2 for the wtxid stuff
+    // the witness root hash gets hashed with the witness reserve value and put into
+    // the scriptpubkey of the second output
+    // I believe the value will be 0
+    // Need to concantinate teh witness root with the witness reserved value then hash it
+    let op_return_prefix = "6a24aa21a9ed";
+    let wtxid_commitment = witness_root + &witness_reserved_value;
+    let wtxid_commitment_hash = double_sha256(hex::decode(wtxid_commitment).unwrap());
+    let wtxid_commitment_hex = hex::encode(wtxid_commitment_hash);
+    let scriptpubkey_for_wtxid = format!("{}{}", op_return_prefix, wtxid_commitment_hex);
+    coinbase_tx.vout.push(Vout {
+        scriptpubkey: scriptpubkey_for_wtxid,
+        scriptpubkey_asm: "".to_string(),
+        scriptpubkey_type: "".to_string(),
+        scriptpubkey_address: None,
+        value: 0,
+    });
+
 
     coinbase_tx
 }
@@ -604,7 +626,6 @@ fn get_segwit_tx_message(
 
     let version = tx.version.to_le_bytes();
     let version = hex::encode(version);
-    println!("Version {}", version);
 
     // Serialze and hash txid+vout for each vin
     let mut input_bytes = Vec::new();
@@ -627,40 +648,31 @@ fn get_segwit_tx_message(
     let input_hash = double_sha256(input_bytes);
     let sequences_hash = double_sha256(sequences_bytes);
 
-    println!("Input Hash: {}", hex::encode(input_hash));
-    println!("Sequence Hash: {}", hex::encode(sequences_hash));
-
     //  Serialize the txid+vout for the specific input
     let vin = &tx.vin[vin_index];
 
     let txid_bytes = hex::decode(vin.txid.clone()).unwrap();
     let reversed_txid_bytes: Vec<u8> = txid_bytes.into_iter().rev().collect();
     let txid = hex::encode(reversed_txid_bytes);
-    println!("Txid for specifictx: {}", txid);
 
     let vout = vin.vout.to_le_bytes();
     let vout = hex::encode(vout);
 
-    println!("Vout for specific tx: {}", vout);
 
     let input = format!("{}{}", txid, vout);
-    println!("Input FOR TX I SIGN: {}", input);
 
 
     // Create a scriptcode for the input being signed
     let scriptcode = format!("1976a914{}88ac", pubkey_hash);
-    println!("Scriptcode: {}", scriptcode);
 
     // Get input amount in sats
     let input_amount = vin.prevout.value;
     let amount_le = input_amount.to_le_bytes();
     let amount_le = hex::encode(amount_le);
-    println!("Amount: {}", amount_le);
 
     // Sequence for input we sign
     let sequence = vin.sequence.to_le_bytes();
     let sequence= hex::encode(sequence);
-    println!("Sequence: {}", sequence);
 
     // Serialize and hash all the output fields
     // hash256(amount+scriptpubkeysize+scriptpubkey)
@@ -669,7 +681,6 @@ fn get_segwit_tx_message(
     let mut output_bytes = Vec::new();
     for vout in tx.vout.iter() {
         let amount_le = vout.value.to_le_bytes();
-        println!("Amount: {}", hex::encode(amount_le));
         output_bytes.extend_from_slice(&amount_le);
 
         // For some reason i get trailing zeros after the compact size so i had to remove them
@@ -677,13 +688,11 @@ fn get_segwit_tx_message(
         let scriptpubkey_size = vout.scriptpubkey.len() / 2;
         let scriptpubkey_size_bytes = compact_size_as_bytes(scriptpubkey_size);
         output_bytes.extend_from_slice(&scriptpubkey_size_bytes);
-        println!("Scriptpubkey Size: {}", hex::encode(scriptpubkey_size_bytes));
 
         let scriptpubkey = vout.scriptpubkey.clone();
         // This is the scriptpubkey in bytes the .
         let scriptpubkey_bytes = hex::decode(scriptpubkey).map_err(|e| e.to_string())?;
         output_bytes.extend_from_slice(&scriptpubkey_bytes);
-        println!("Scriptpubkey: {}", hex::encode(scriptpubkey_bytes));
     }
 
     let output_hash = double_sha256(output_bytes);
@@ -691,12 +700,10 @@ fn get_segwit_tx_message(
     // Locktime
     let locktime = tx.locktime.to_le_bytes();
     let locktime = hex::encode(locktime);
-    println!("Locktime: {}", locktime);
 
     // Need to add the sighash type to the preimage
     let sighash_type_u32 = u32::from_le(sighash_type as u32);
     let formatted_sighash = hex::encode(sighash_type_u32.to_le_bytes());
-    println!("Sighash Type: {}", formatted_sighash);
 
     // preimage or message to be signed
     // Assuming all the variables are already defined and have the correct values
@@ -712,19 +719,10 @@ fn get_segwit_tx_message(
                            locktime,
                            formatted_sighash,
     );
-    println!("Preimage: {}", preimage);
 
     Ok(preimage)
 }
 
-// fn compact_size(n:usize)  -> String {
-//     match n {
-//         0..=0xfc => format!("{:02x}", n),
-//         0xfd..=0xffff => format!("fd{:04x}", n),
-//         0x10000..=0xffffffff => format!("fe{:08x}", n),
-//         _ => format!("ff{:016x}", n),
-//     }
-// }
 fn compact_size_as_bytes(size: usize) -> Vec<u8> {
     match size {
         0..=0xfc => vec![size as u8],
@@ -753,7 +751,7 @@ fn compact_size_as_bytes(size: usize) -> Vec<u8> {
 //         //
 //         // }
 // Do i need to worry about bech32 addresses?
-fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, String), Box<dyn Error>> {
+fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, String, String), Box<dyn Error>> {
     // Create a stack to hold the data
     let mut stack: Vec<Vec<u8>> = Vec::new();
 
@@ -762,9 +760,14 @@ fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Stri
     for (i, vin) in transaction.vin.iter().enumerate() {
         stack.clear();
 
-
         let witness = vin.witness.clone().ok_or("Witness data not found")?;
+        if witness.len() < 2 {
+            return Err("Witness data is missing elements".into());
+        }
         let signature = hex::decode(witness[0].clone())?;
+        if signature.is_empty(){
+            return Err("Signature is empty".into());
+        }
 
         // sighash type off sig
         let sighash_type = signature[signature.len()-1];
@@ -787,7 +790,7 @@ fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Stri
             pubkey_hash.clone(),
             sighash_type.clone()
        )?;
-        let message_in_bytes = hex::decode(&message_hash).unwrap();
+        let message_in_bytes = hex::decode(&message_hash)?;
 
 
 
@@ -884,15 +887,23 @@ fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Stri
     }
 
     // May need to change this a bit...
-    let serialized_validtx = serialized_segwit_tx(transaction);
+    // FOR WTXID
+    let serialized_validwtx = serialized_segwit_tx(transaction);
+    let wtx_bytes = hex::decode(serialized_validwtx.clone())?;
+    let wtxid_be = double_sha256(wtx_bytes);
+    let mut wtxid_le = wtxid_be;
+    wtxid_le.reverse();
+    let wtxid = hex::encode(wtxid_le);
+
+    // FOR TXID
+    let serialized_validtx = serialize_tx(transaction);
     let tx_bytes = hex::decode(serialized_validtx).unwrap();
     let txid_be = double_sha256(tx_bytes);
     let mut txid_le = txid_be;
     txid_le.reverse();
-    let wtxid = hex::encode(txid_le);
+    let txid = hex::encode(txid_le);
 
-
-    Ok((true, wtxid))
+    Ok((true, wtxid, txid))
 }
 
 /// This function will validate a P2PKH transaction
@@ -1034,9 +1045,6 @@ fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Strin
     txid_le.reverse();
     let txid = hex::encode(txid_le);
 
-    //Ok((true, hex::encode(txid)))
-
-    // Ok((true, hex::encode(txid_hex)))
     Ok((true, txid))
 }
 
@@ -1125,6 +1133,7 @@ fn append_to_file(filename: &str, contents: &str) -> io::Result<()> {
 fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProcessing>> {
     let mut valid_txs: Vec<TransactionForProcessing> = Vec::new();
 
+
     for tx in fs::read_dir(mempool_path)? {
         let tx = tx?;
         let path = tx.path();
@@ -1132,13 +1141,37 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProcessin
             if let Some(path_str) = path.to_str() {
                 let mut transaction = deserialize_tx(path_str);
 
-                let (is_valid, txid) = match p2pkh_script_validation(&mut transaction) {
-                    Ok(result) => result,
-                    Err(_e) => {
-                        //eprintln!("An error occured, failed to validate transaction: {:?}", e);
-                        continue;
-                    }
-                };
+                let mut is_valid = false;
+                let mut fee = 0u64;
+                let mut txid = String::new();
+                let mut wtxid = None;
+
+                // Check script type and validate accordingly
+                match transaction.vin[0].prevout.scriptpubkey_type.as_str() {
+                    "v0_p2wpkh" => {
+                        // If it's a p2wpkh transaction validate it
+                        match p2wpkh_script_validation(&mut transaction) {
+                            Ok((valid, wtx_id, tx_id)) if valid => {
+                                is_valid = true;
+                                wtxid = Some(wtx_id);
+                                txid = tx_id;  // Using the txid returned by the validation function
+                            },
+                            _ => continue,
+                        }
+                    },
+                    "p2pkh" => {
+                        // If it's a p2pkh transaction validate it
+                        match p2pkh_script_validation(&mut transaction) {
+                            Ok((valid, tx_id)) if valid => {
+                                is_valid = true;
+                                txid = tx_id;
+                            },
+                            _ => continue,
+                        }
+                    },
+                    _ => continue,
+                }
+
                 if !is_valid {
                     //eprintln!("Transaction is not valid: {:?}", path);
                 }
@@ -1164,17 +1197,20 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProcessin
                 let min_relay_fee_per_byte: u64 = 3; // 3 satoshis per byte  could go up or down 1-5
                 remove_dust_transactions(&mut transaction, min_relay_fee_per_byte);
 
-                // Push the txid and fee to the valid_txs vec
-                valid_txs.push(
-                    TransactionForProcessing {
-                        transaction: transaction.clone(),
-                        txid: txid.clone(),
-                        fee, });
-
                 // Check for double spending
                 if !check_double_spending(&transaction, &valid_txs) {
                     continue;
                 }
+
+                // Add the transaction to the list of valid transactions
+                valid_txs.push(TransactionForProcessing {
+                    transaction,
+                    txid,
+                    wtxid: wtxid.clone(),
+                    fee,
+                    is_p2wpkh: wtxid.is_some(),
+                });
+
 
             }else {
                 //eprintln!("Failed to convert path to string: {:?}", path);
@@ -1213,30 +1249,6 @@ fn  calculate_transaction_weight(tx: &Transaction)  ->  u64  {
 // ISSUE Block does not meet target difficulty
 // So my block hash is too big so maybe too many transations in a block?
 fn main() {
-    // let tx = "../mempool/0a8b21af1cfcc26774df1f513a72cd362a14f5a598ec39d915323078efb5a240.json";
-    // let deserialized_tx = deserialize_tx(tx);
-    // let serialized_tx = serialize_tx(&deserialized_tx);
-    // println!("SerializedTX: {}", serialized_tx);
-    // let tx_data  = hex::decode(serialized_tx).unwrap();
-    // let txid = double_sha256(tx_data);
-    // println!("TXID: {:?}", hex::encode(&txid));
-
-    // code to test the p2wpkh validation
-    // let tx = "../mempool/3b36caabcc07bb12a0d89f79baf09304b7abb9339eb05ea813f8ffd82b713755.json";
-    // let mut serde_tx = deserialize_tx(tx);
-    // match p2wpkh_script_validation(&mut serde_tx) {
-    //     Ok((valid, wtxid)) => {
-    //         println!("Valid: {}, WTXID: {}\n", valid, wtxid);
-    //     }
-    //     Err(e) => {
-    //         println!("\nError occured during validation of p2wpkh {}", e);
-    //     }
-    // }
-
-
-
-    // UNCOMMENT TO TEST THE MEMPOOL
-
     // Path to the mempool folder
     let mempool_path = "../mempool";
 
@@ -1244,7 +1256,7 @@ fn main() {
     let mut nonce = 0u32;
 
     // Get the valid txs from the mempool
-    let valid_tx = process_mempool(mempool_path).unwrap();
+    let valid_txs = process_mempool(mempool_path).unwrap();
 
     // // Calculate the total fees and get the txids
     // let mut valid_txids: Vec<String> = Vec::new();
@@ -1255,83 +1267,87 @@ fn main() {
     let max_block_weight = 4000000u64;
     let mut total_fees = 0u64;
 
-    let valid_tx_clone =  valid_tx.clone();
+    // Sort transactions by fee in descending order before processing
+    let sorted_valid_txs: Vec<_> = valid_txs.iter()
+        .sorted_by(|a, b| b.fee.cmp(&a.fee))
+        .collect();
 
-    for tx in valid_tx_clone {
+    // Select transactions to include in the block based on sorted order
+    for tx in sorted_valid_txs {
         let tx_weight = calculate_transaction_weight(&tx.transaction);
         if total_weight + tx_weight > max_block_weight {
-            // If the block weight exceeds the limit, break the loop
-            break;
+            break;  // Stop if adding this transaction would exceed the max block weight
         }
         block_txs.push(tx.clone());
         total_weight += tx_weight;
-        total_fees  += tx.fee; // Add the fee to the total fees
+        total_fees += tx.fee;
     }
 
-    // Sort the transactions in descending order based on the fee
-    let sorted_valid_tx: Vec<_> = block_txs.iter()
-        .cloned().sorted_by(|a, b| b.fee.cmp(&a.fee)).
-        collect();
-
-    // Get txids from sorted valid txs
-    let mut sorted_txids : Vec<String> = sorted_valid_tx.iter().map(|tx| tx.txid.clone()).collect();
+    // Get the wtxids for the witness root
+    let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
+    for tx in &block_txs {
+        if tx.is_p2wpkh {
+            if let Some(ref wtxid) = tx.wtxid {
+                wtx_ids_for_witness_root.push(wtxid.clone());  // Collect wtxid if applicable
+            }
+        }
+    }
+    // Calculate the witness root
+    let witness_root = get_merkle_root(wtx_ids_for_witness_root);
 
     // Generate coinbase tx
-    let coinbase_tx = create_coinbase_tx(total_fees);
+    let coinbase_tx = create_coinbase_tx(total_fees, witness_root);
     let serialized_cb_tx = serialize_tx(&coinbase_tx);
     let cd_tx_bytes = hex::decode(serialized_cb_tx.clone()).unwrap();
 
     // coinbase txid
-    let coinbase_txid = double_sha256(cd_tx_bytes);
-    // Reverse the bytes
+    let coinbase_txid = double_sha256(cd_tx_bytes.clone());
     let mut coinbase_txid_le = coinbase_txid.to_vec();
     coinbase_txid_le.reverse();
     let coinbase_txid = hex::encode(coinbase_txid_le);
 
-    // Insert the coinbase txid at the beginning of the valid_txids vector
-    sorted_txids.insert(0, coinbase_txid);
+    // Get the txids for the merkle root
+    let mut txids_for_merkle = vec![coinbase_txid];
 
-    let merkle_root = get_merkle_root(sorted_txids.clone());
+
+    for tx in &block_txs {
+        txids_for_merkle.push(tx.txid.clone());  // Use txid for Merkle root
+    }
+    // Calculate the merkle root
+    let merkle_root = get_merkle_root(txids_for_merkle);
+
+
 
     // Start Mining!
     loop {
         // Get the block header and serialize it
         let block_header = construct_block_header(nonce, merkle_root.clone());
-
         let serialized_block_header = serialize_block_header(&block_header);
-
 
         // Calculate the hash of the block header
         //let block_hash = calculate_hash(serialized_block_header.clone());
         let  block_hash =  double_sha256(serialized_block_header.clone());
-        // I reversed the block hash and it worked soooo ???
         let mut block_h = block_hash;
         block_h.reverse();
         let block_hash = hex::encode(block_h);
 
-
         // Check if the hash meets the target
         if hash_meets_difficulty_target(&block_hash) {
-
-            // Clear the output file
-            fs::write("../output.txt", "").unwrap();
-
-            // Write the block header, coinbase tx, and txids to the output file
-            append_to_file("../output.txt", &hex::encode(serialized_block_header)).unwrap();
-            append_to_file("../output.txt", &serialized_cb_tx).unwrap();
-
-            // to test block weight
-            //let half_txid = sorted_txids.len() /2;
-
-            // Add the txids to the block
-            for txid in &sorted_txids {
-                append_to_file("../output.txt", txid).unwrap();
-            }
+            write_block_to_file(&serialized_block_header, &cd_tx_bytes, &block_txs);
             println!("Success, the block met the target difficulty!");
             break;
         } else {
             nonce += 1;
         }
+    }
+}
+
+fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], block_txs: &[TransactionForProcessing]) {
+    fs::write("../output.txt", "").unwrap();  // Clear the output file
+    append_to_file("../output.txt", &hex::encode(serialized_header)).unwrap();
+    append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
+    for tx in block_txs {
+        append_to_file("../output.txt", &tx.txid).unwrap();
     }
 }
 
