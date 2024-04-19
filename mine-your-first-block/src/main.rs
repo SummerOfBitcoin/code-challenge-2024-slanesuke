@@ -755,8 +755,6 @@ fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Stri
     // Create a stack to hold the data
     let mut stack: Vec<Vec<u8>> = Vec::new();
 
-    let serialized_tx = String::new();
-
     for (i, vin) in transaction.vin.iter().enumerate() {
         stack.clear();
 
@@ -1032,12 +1030,6 @@ fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Strin
         }
     }
 
-    //////
-    // let serialized_validtx = serialized_tx_for_message.as_bytes();
-    // let txid: [u8; 32] = double_sha256(serialized_validtx.to_vec());
-    // let txid_reversed = txid.iter().rev().cloned().collect::<Vec<u8>>();
-    // let txid_hex = hex::encode(txid_reversed);
-
     let serialized_validtx = serialize_tx(transaction);
     let tx_bytes = hex::decode(serialized_validtx).unwrap();
     let txid_be = double_sha256(tx_bytes);
@@ -1154,7 +1146,7 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProcessin
                             Ok((valid, wtx_id, tx_id)) if valid => {
                                 is_valid = true;
                                 wtxid = Some(wtx_id);
-                                txid = tx_id;  // Using the txid returned by the validation function
+                                txid = tx_id;
                             },
                             _ => continue,
                         }
@@ -1210,8 +1202,6 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProcessin
                     fee,
                     is_p2wpkh: wtxid.is_some(),
                 });
-
-
             }else {
                 //eprintln!("Failed to convert path to string: {:?}", path);
             }
