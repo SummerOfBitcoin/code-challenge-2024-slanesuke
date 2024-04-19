@@ -1314,8 +1314,8 @@ fn main() {
         txids_for_merkle.push(tx.txid.clone());  // Use txid for Merkle root
     }
     // Calculate the merkle root
-    let merkle_root = get_merkle_root(txids_for_merkle);
-
+    let merkle_root = get_merkle_root(txids_for_merkle.clone());
+    println!("Merkle Root: {}", merkle_root);
 
 
     // Start Mining!
@@ -1333,7 +1333,8 @@ fn main() {
 
         // Check if the hash meets the target
         if hash_meets_difficulty_target(&block_hash) {
-            write_block_to_file(&serialized_block_header, &cd_tx_bytes, &block_txs);
+            //write_block_to_file(&serialized_block_header, &cd_tx_bytes, &block_txs);
+            write_block_to_file(&serialized_block_header, &cd_tx_bytes, txids_for_merkle.clone(), &block_txs);
             println!("Success, the block met the target difficulty!");
             break;
         } else {
@@ -1342,12 +1343,17 @@ fn main() {
     }
 }
 
-fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], block_txs: &[TransactionForProcessing]) {
+fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: Vec<String>, block_txs: &[TransactionForProcessing]) {
     fs::write("../output.txt", "").unwrap();  // Clear the output file
     append_to_file("../output.txt", &hex::encode(serialized_header)).unwrap();
     append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
-    for tx in block_txs {
-        append_to_file("../output.txt", &tx.txid).unwrap();
+    // for tx in block_txs {
+    //     println!("{}", &tx.txid);
+    //     append_to_file("../output.txt", &tx.txid).unwrap();
+    // }
+    for txids in txs {
+        println!("{}", txids);
+        append_to_file("../output.txt", &txids).unwrap();
     }
 }
 
