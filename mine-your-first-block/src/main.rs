@@ -385,6 +385,8 @@ fn serialize_tx(transaction: &Transaction) -> String {
     for vin in &transaction.vin {
         if let Some(witness) = &vin.witness {
             if witness[0] == "0000000000000000000000000000000000000000000000000000000000000000" {
+                serialized_tx.push_str("01");
+                serialized_tx.push_str("20");
                 serialized_tx.push_str(&witness[0]);
             }
         }
