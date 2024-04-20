@@ -1397,7 +1397,7 @@ fn main() {
     }
     // Calculate the merkle root
     let merkle_root = get_merkle_root(txids_for_merkle.clone());
-    println!("Merkle Root: {}", merkle_root);
+    //println!("Merkle Root: {}", merkle_root);
 
 
     // Start Mining!
@@ -1434,7 +1434,7 @@ fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: V
     //     append_to_file("../output.txt", &tx.txid).unwrap();
     // }
     for txids in txs {
-        println!("{}", txids);
+        //println!("{}", txids);
         append_to_file("../output.txt", &txids).unwrap();
     }
 }
