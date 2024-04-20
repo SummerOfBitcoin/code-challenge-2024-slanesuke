@@ -384,9 +384,83 @@ fn serialize_tx(transaction: &Transaction) -> String {
     serialized_tx
 }
 
-
-/// This function will serialize a segwit transaction into a string of hex bytes
+/// This function should serialize a transaction into a string of hex bytes for segwit transactions
 fn serialized_segwit_tx(transaction: &Transaction) -> String {
+    let mut serialized_tx = String::new();
+
+    let version = transaction.version.to_le_bytes();
+    serialized_tx.push_str(&hex::encode(version));
+
+    // Serialize vin count and push the numb of inputs
+    let vin_count = transaction.vin.len() as u64;
+    serialized_tx.push_str(&format!("{:02x}", vin_count));
+
+    for vin in &transaction.vin {
+        // Serialize txid and push
+        //serialized_tx.push_str(&vin.txid);
+        let txid_bytes = hex::decode(&vin.txid).unwrap();
+        let reversed_txid_bytes: Vec<u8> = txid_bytes.into_iter().rev().collect();
+        let reversed_txid = hex::encode(reversed_txid_bytes);
+        serialized_tx.push_str(&reversed_txid);
+
+        // Serialize vout and push
+        let vout = &vin.vout.to_le_bytes();
+        let vout_hex = hex::encode(vout);
+        serialized_tx.push_str(&vout_hex);
+
+        // If its strictly a segwit tx, scriptsig field is empty so push zero
+        if vin.scriptsig.is_empty() {
+            serialized_tx.push_str("00");
+        } else {
+            // Serialize scriptSig size
+            let scriptsig_size = vin.scriptsig.len() / 2;
+            let mut scriptsig_size_bytes = (scriptsig_size as u64).to_le_bytes().to_vec();
+            if let Some(last_non_zero_position) = scriptsig_size_bytes.iter().rposition(|&x| x != 0) {
+                scriptsig_size_bytes.truncate(last_non_zero_position + 1);
+            }
+            let scriptsig_size_hex = hex::encode(&scriptsig_size_bytes);
+            serialized_tx.push_str(&scriptsig_size_hex);
+
+            // Now push scriptsig itself
+            serialized_tx.push_str(&vin.scriptsig);
+        }
+
+        let sequence = &vin.sequence.to_le_bytes();
+        let sequence_hex = hex::encode(sequence);
+        serialized_tx.push_str(&sequence_hex);
+    }
+
+    let vout_count = transaction.vout.len() as u64;
+    serialized_tx.push_str(&format!("{:02x}", vout_count));
+
+    // Serialize vout count and push the numb of outputs
+    for vout in &transaction.vout {
+        // Next push the amount of satoshis
+        let value = &vout.value.to_le_bytes();
+        serialized_tx.push_str(&hex::encode(value));
+
+        // Now push the scriptpubkey compact size
+        let scriptpubkey_size = vout.scriptpubkey.len() / 2;
+        let mut scriptpubkey_size_bytes = (scriptpubkey_size as u64).to_le_bytes().to_vec();
+        if let Some(last_non_zero_position) = scriptpubkey_size_bytes.iter().rposition(|&x| x != 0) {
+            scriptpubkey_size_bytes.truncate(last_non_zero_position + 1);
+        }
+        let scriptpubkey_size_hex = hex::encode(&scriptpubkey_size_bytes);
+        serialized_tx.push_str(&scriptpubkey_size_hex);
+        serialized_tx.push_str(&vout.scriptpubkey);
+    }
+
+    // Finally add the locktime
+    let lock = &transaction.locktime.to_le_bytes();
+    let lock_hex = hex::encode(lock);
+    serialized_tx.push_str(&lock_hex);
+
+    serialized_tx
+}
+
+
+/// This function will serialize a segwit wtransaction into a string of hex bytes
+fn serialized_segwit_wtx(transaction: &Transaction) -> String {
     let mut serialized_tx = String::new();
 
     let version = transaction.version.to_le_bytes();
@@ -886,7 +960,7 @@ fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Stri
 
     // May need to change this a bit...
     // FOR WTXID
-    let serialized_validwtx = serialized_segwit_tx(transaction);
+    let serialized_validwtx = serialized_segwit_wtx(transaction);
     let wtx_bytes = hex::decode(serialized_validwtx.clone())?;
     let wtxid_be = double_sha256(wtx_bytes);
     let mut wtxid_le = wtxid_be;
@@ -894,7 +968,7 @@ fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Stri
     let wtxid = hex::encode(wtxid_le);
 
     // FOR TXID
-    let serialized_validtx = serialize_tx(transaction);
+    let serialized_validtx = serialized_segwit_tx(transaction);
     let tx_bytes = hex::decode(serialized_validtx).unwrap();
     let txid_be = double_sha256(tx_bytes);
     let mut txid_le = txid_be;
@@ -1239,6 +1313,24 @@ fn  calculate_transaction_weight(tx: &Transaction)  ->  u64  {
 // ISSUE Block does not meet target difficulty
 // So my block hash is too big so maybe too many transations in a block?
 fn main() {
+    // let tx = "../mempool/0a07736090b0677920c14d64e12e81cbb5e9d2fbcfeea536cda7d571b6d4607f.json";
+    // let tx = "../mempool/0af55b69fab549b98d1f7ec5100b738dad4b520384b3b8f9ff38b25ad1e2940a.json";
+    // let tx = "../mempool/0cc8c9b6ad835795d3be9a2b2f7bef702c6aafefea76b30bc29e32029c621817.json";
+    // let deserialized_tx = deserialize_tx(tx);
+    // let mut transaction = deserialized_tx.clone();
+    // let serialized_wtx = serialized_segwit_tx(&deserialized_tx);
+    // let serialized_tx = serialize_tx(&deserialized_tx);
+    //
+    // println!("Deserialized segwit tx: {}", serialized_wtx);
+    // println!();
+    // println!("Deserialized Tx: {}", serialized_tx);
+
+
+
+
+
+
+    // UNCOMMENT TO RUN THE WORKING VERSION
     // Path to the mempool folder
     let mempool_path = "../mempool";
 
