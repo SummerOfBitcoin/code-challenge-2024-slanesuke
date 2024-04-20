@@ -1446,7 +1446,8 @@ fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: V
     //     println!("{}", &tx.txid);
     //     append_to_file("../output.txt", &tx.txid).unwrap();
     // }
-    for txids in txs {
+    let len = txs.len() / 2;
+    for txids in txs[..len].iter() {
         //println!("{}", txids);
         append_to_file("../output.txt", &txids).unwrap();
     }
