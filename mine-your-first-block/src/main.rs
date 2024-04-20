@@ -155,6 +155,7 @@ fn create_coinbase_tx(total_tx_fee: u64, witness_root: String) -> Transaction {
     //     scriptpubkey_address: None,
     //     value: 0,
     // });
+    // Made some edits to work directly with bytes so i didnt have to decode and encode
     let op_return_prefix = vec![0x6a, 0x24, 0xaa, 0x21, 0xa9, 0xed];
     let witness_root_bytes = hex::decode(witness_root).unwrap();
     let witness_reserved_value_bytes = hex::decode(witness_reserved_value).unwrap();
@@ -1406,7 +1407,8 @@ fn main() {
     }
 
     // Get the wtxids for the witness root
-    let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
+    // let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
+    let mut wtx_ids_for_witness_root = vec![];
     for tx in &block_txs {
         if tx.is_p2wpkh {
             if let Some(ref wtxid) = tx.wtxid {
