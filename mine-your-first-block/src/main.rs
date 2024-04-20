@@ -373,6 +373,18 @@ fn serialize_tx(transaction: &Transaction) -> String {
         serialized_tx.push_str(&vout.scriptpubkey);
     }
 
+    // Need the witness to be added to the coinbase tx so if there is a witness field that is equal to
+    // "0000000000000000000000000000000000000000000000000000000000000000" then push to the serialized tx
+    // before the locktime
+    for vin in &transaction.vin {
+        if let Some(witness) = &vin.witness {
+            if witness[0] == "0000000000000000000000000000000000000000000000000000000000000000" {
+                serialized_tx.push_str(&witness[0]);
+            }
+        }
+    }
+
+
     let lock = &transaction.locktime.to_le_bytes();
     let lock_hex = hex::encode(lock);
     serialized_tx.push_str(&lock_hex);
@@ -1381,6 +1393,7 @@ fn main() {
     let coinbase_tx = create_coinbase_tx(total_fees, witness_root);
     let serialized_cb_tx = serialize_tx(&coinbase_tx);
     let cd_tx_bytes = hex::decode(serialized_cb_tx.clone()).unwrap();
+    //println!("Coinbase tx: {}", serialized_cb_tx);
 
     // coinbase txid
     let coinbase_txid = double_sha256(cd_tx_bytes.clone());
