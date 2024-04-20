@@ -143,13 +143,33 @@ fn create_coinbase_tx(total_tx_fee: u64, witness_root: String) -> Transaction {
     // the scriptpubkey of the second output
     // I believe the value will be 0
     // Need to concantinate teh witness root with the witness reserved value then hash it
-    let op_return_prefix = "6a24aa21a9ed";
-    let wtxid_commitment = witness_root + &witness_reserved_value;
-    let wtxid_commitment_hash = double_sha256(hex::decode(wtxid_commitment).unwrap());
-    let wtxid_commitment_hex = hex::encode(wtxid_commitment_hash);
-    let scriptpubkey_for_wtxid = format!("{}{}", op_return_prefix, wtxid_commitment_hex);
+    // let op_return_prefix = "6a24aa21a9ed";
+    // let wtxid_commitment = witness_root + &witness_reserved_value;
+    // let wtxid_commitment_hash = double_sha256(hex::decode(wtxid_commitment).unwrap());
+    // let wtxid_commitment_hex = hex::encode(wtxid_commitment_hash);
+    // let scriptpubkey_for_wtxid = format!("{}{}", op_return_prefix, wtxid_commitment_hex);
+    // coinbase_tx.vout.push(Vout {
+    //     scriptpubkey: scriptpubkey_for_wtxid,
+    //     scriptpubkey_asm: "".to_string(),
+    //     scriptpubkey_type: "".to_string(),
+    //     scriptpubkey_address: None,
+    //     value: 0,
+    // });
+    let op_return_prefix = vec![0x6a, 0x24, 0xaa, 0x21, 0xa9, 0xed];
+    let witness_root_bytes = hex::decode(witness_root).unwrap();
+    let witness_reserved_value_bytes = hex::decode(witness_reserved_value).unwrap();
+
+    let mut wtxid_commitment = Vec::new();
+    wtxid_commitment.extend(witness_root_bytes);
+    wtxid_commitment.extend(witness_reserved_value_bytes);
+
+    let wtxid_commitment_hash = double_sha256(wtxid_commitment);
+
+    let mut scriptpubkey_for_wtxid = op_return_prefix;
+    scriptpubkey_for_wtxid.extend(wtxid_commitment_hash);
+
     coinbase_tx.vout.push(Vout {
-        scriptpubkey: scriptpubkey_for_wtxid,
+        scriptpubkey: hex::encode(scriptpubkey_for_wtxid),
         scriptpubkey_asm: "".to_string(),
         scriptpubkey_type: "".to_string(),
         scriptpubkey_address: None,
@@ -1390,7 +1410,7 @@ fn main() {
     for tx in &block_txs {
         if tx.is_p2wpkh {
             if let Some(ref wtxid) = tx.wtxid {
-                wtx_ids_for_witness_root.push(wtxid.clone());  // Collect wtxid if applicable
+                wtx_ids_for_witness_root.push(wtxid.clone());  // Collect wtxid if valid
             }
         }
     }
