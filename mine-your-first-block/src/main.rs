@@ -306,6 +306,12 @@ fn serialize_tx(transaction: &Transaction) -> String {
     let version = transaction.version.to_le_bytes();
     serialized_tx.push_str(&hex::encode(version));
 
+    // For the coinbase transaction in between the version and vin count I need to add the marker and flag
+    // If the is_coinbase == true push 00 and 01
+    if transaction.vin[0].is_coinbase {
+        serialized_tx.push_str("0001");
+    }
+
     // Serialize vin count
     let vin_count = transaction.vin.len() as u64;
     serialized_tx.push_str(&format!("{:02x}", vin_count));
@@ -1446,8 +1452,8 @@ fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: V
     //     println!("{}", &tx.txid);
     //     append_to_file("../output.txt", &tx.txid).unwrap();
     // }
-    let len = txs.len() / 2;
-    for txids in txs[..len].iter() {
+    //let len = txs.len() / 2;
+    for txids in txs {
         //println!("{}", txids);
         append_to_file("../output.txt", &txids).unwrap();
     }
