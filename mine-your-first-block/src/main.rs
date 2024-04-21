@@ -156,21 +156,20 @@ fn create_coinbase_tx(total_tx_fee: u64, witness_root: String) -> Transaction {
     //     value: 0,
     // });
     // Made some edits to work directly with bytes so i didnt have to decode and encode
-    let op_return_prefix = vec![0x6a, 0x24, 0xaa, 0x21, 0xa9, 0xed];
-    // let witness_root_bytes = hex::decode(witness_root).unwrap();
-    let witness_root_bytes = hex::decode(witness_root).unwrap();
-    let reversed_witness_root_bytes: Vec<u8> = witness_root_bytes.into_iter().rev().collect();
+    //let op_return_prefix = vec![0x6a, 0x24, 0xaa, 0x21, 0xa9, 0xed];
+    let mut witness_root_bytes = hex::decode(witness_root).unwrap();
+    witness_root_bytes.reverse();
     let witness_reserved_value_bytes = hex::decode(witness_reserved_value).unwrap();
 
     let mut wtxid_commitment = Vec::new();
-    wtxid_commitment.extend(reversed_witness_root_bytes);
+    wtxid_commitment.extend(witness_root_bytes);
     wtxid_commitment.extend(witness_reserved_value_bytes);
 
     let wtxid_commitment_hash = double_sha256(wtxid_commitment);
 
-    let mut scriptpubkey_for_wtxid = op_return_prefix;
-    scriptpubkey_for_wtxid.extend(wtxid_commitment_hash);
-
+    // let mut scriptpubkey_for_wtxid = op_return_prefix;
+    // scriptpubkey_for_wtxid.extend(wtxid_commitment_hash);
+    let scriptpubkey_for_wtxid = format!("{}{}", "6a24aa21a9ed", hex::encode(wtxid_commitment_hash));
     coinbase_tx.vout.push(Vout {
         scriptpubkey: hex::encode(scriptpubkey_for_wtxid),
         scriptpubkey_asm: "".to_string(),
