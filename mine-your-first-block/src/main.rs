@@ -78,7 +78,7 @@ struct BlockHeader {
 }
 
 /// This function will return the coinbase transaction
-fn create_coinbase_tx(total_tx_fee: u64, witness_root_vec: Vec<String>) -> Transaction {
+fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> Transaction {
     let mut coinbase_tx = Transaction {
         version: 0,
         locktime: 0,
@@ -142,7 +142,7 @@ fn create_coinbase_tx(total_tx_fee: u64, witness_root_vec: Vec<String>) -> Trans
     // the witness root hash gets hashed with the witness reserve value and put into
     // the scriptpubkey of the second output
     // Made some edits to work directly with bytes so i didnt have to decode and encode
-
+    witness_root_vec.insert(0, witness_reserved_value.to_string());
 
     let witness_root_hash = get_merkle_root(witness_root_vec);
     let mut witness_root_hash_bytes = hex::decode(witness_root_hash).unwrap();
