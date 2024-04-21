@@ -1339,7 +1339,7 @@ fn main() {
     // Initializing block weight
     let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
     let mut total_weight = 0u64;
-    let max_block_weight = 2000000u64;
+    let max_block_weight = 1000000u64;
     let mut total_fees = 0u64;
 
     // Sort transactions by fee in descending order before processing
@@ -1431,10 +1431,11 @@ fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: V
         // println!("{}", &tx.txid);
         append_to_file("../output.txt", &tx.txid).unwrap();
     }
-    // println!("wtxids::::::");
+
     // for tx in block_txs {
-    //     println!("{}", &tx.wtxid.clone().unwrap_or_default());
-    //     // append_to_file("../output.txt", &tx.txid).unwrap();
+    //     if let Some(ref wtxid) = tx.wtxid {
+    //         println!("wtxid: {}, txid: {}", wtxid, tx.txid);
+    //     }
     // }
 }
 
