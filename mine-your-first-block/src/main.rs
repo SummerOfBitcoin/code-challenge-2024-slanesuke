@@ -157,11 +157,13 @@ fn create_coinbase_tx(total_tx_fee: u64, witness_root: String) -> Transaction {
     // });
     // Made some edits to work directly with bytes so i didnt have to decode and encode
     let op_return_prefix = vec![0x6a, 0x24, 0xaa, 0x21, 0xa9, 0xed];
+    // let witness_root_bytes = hex::decode(witness_root).unwrap();
     let witness_root_bytes = hex::decode(witness_root).unwrap();
+    let reversed_witness_root_bytes: Vec<u8> = witness_root_bytes.into_iter().rev().collect();
     let witness_reserved_value_bytes = hex::decode(witness_reserved_value).unwrap();
 
     let mut wtxid_commitment = Vec::new();
-    wtxid_commitment.extend(witness_root_bytes);
+    wtxid_commitment.extend(reversed_witness_root_bytes);
     wtxid_commitment.extend(witness_reserved_value_bytes);
 
     let wtxid_commitment_hash = double_sha256(wtxid_commitment);
@@ -1249,7 +1251,6 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProcessin
                 let mut transaction = deserialize_tx(path_str);
 
                 let mut is_valid = false;
-                let mut fee = 0u64;
                 let mut txid = String::new();
                 let mut wtxid = None;
 
@@ -1407,8 +1408,7 @@ fn main() {
     }
 
     // Get the wtxids for the witness root
-    // let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
-    let mut wtx_ids_for_witness_root = vec![];
+    let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
     for tx in &block_txs {
         if tx.is_p2wpkh {
             if let Some(ref wtxid) = tx.wtxid {
@@ -1416,6 +1416,7 @@ fn main() {
             }
         }
     }
+
     // Calculate the witness root
     let witness_root = get_merkle_root(wtx_ids_for_witness_root);
 
