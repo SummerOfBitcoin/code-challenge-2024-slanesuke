@@ -146,7 +146,7 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
 
     let witness_root_hash = get_merkle_root(witness_root_vec);
     let mut witness_root_hash_bytes = hex::decode(witness_root_hash).unwrap();
-    witness_root_hash_bytes.reverse(); // Reverse to match endianness maybe dont need this??
+    //witness_root_hash_bytes.reverse(); // Reverse to match endianness maybe dont need this??
 
     let reserved_value = vec![0; 32]; // 32 bytes of zeros
     let mut commitment_payload = Vec::new();
@@ -1339,7 +1339,8 @@ fn main() {
     // Initializing block weight
     let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
     let mut total_weight = 0u64;
-    let max_block_weight = 1000000u64;
+    //let max_block_weight = 4000000u64;
+    let max_block_weight = 100000u32;
     let mut total_fees = 0u64;
 
     // Sort transactions by fee in descending order before processing
