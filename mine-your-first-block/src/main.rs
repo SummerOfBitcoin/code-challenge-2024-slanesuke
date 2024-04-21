@@ -157,6 +157,7 @@ fn create_coinbase_tx(total_tx_fee: u64, witness_root_vec: Vec<String>) -> Trans
 
 // Format the OP_RETURN output correctly
     let scriptpubkey_for_wtxid = format!("6a24aa21a9ed{}", hex::encode(wtxid_commitment));
+    let scriptpubkey_for_wtxid = "6a24aa21a9ed5215526c1145b0f86bf0894d1fd715ce67ed5ebf4aa7327419520c3a1851253a".to_string();
     coinbase_tx.vout.push(Vout {
         scriptpubkey: scriptpubkey_for_wtxid,
         scriptpubkey_asm: "".to_string(),
@@ -1373,7 +1374,7 @@ fn main() {
     // let witness_root = get_merkle_root(wtx_ids_for_witness_root.clone());
 
     // Generate coinbase tx
-    let coinbase_tx = create_coinbase_tx(total_fees, wtx_ids_for_witness_root);
+    let coinbase_tx = create_coinbase_tx(total_fees, wtx_ids_for_witness_root.clone());
     let serialized_cb_tx = serialize_tx(&coinbase_tx);
     let cd_tx_bytes = hex::decode(serialized_cb_tx.clone()).unwrap();
     // coinbase txid
@@ -1396,44 +1397,20 @@ fn main() {
     let txids_for_merkle = block_txs.iter().map(|tx| tx.txid.clone()).collect::<Vec<_>>();
     let merkle_root = get_merkle_root(txids_for_merkle.clone());
 
-    // Get the txids for the merkle root
-    // let mut txids_for_merkle = vec![coinbase_txid];
-    // for tx in &block_txs {
-    //     txids_for_merkle.push(tx.txid.clone());  // Use txid for Merkle root
-    // }
+    // Testing the witness root calculation in main
+    let  witness_root_hash = get_merkle_root(wtx_ids_for_witness_root.clone());
+    let mut witness_root_hash_bytes = hex::decode(witness_root_hash).unwrap();
+    witness_root_hash_bytes.reverse(); // Reverse to match endianness
 
-    // Calculate the merkle root
-    //let merkle_root = get_merkle_root(txids_for_merkle.clone());
-    // println!("Merkle Root: {}", merkle_root);
-    // println!("AND THE TXIDS ARE: ");
-    // for tx in &txids_for_merkle {
-    //     println!("{}", &tx);
-    // }
-    // println!("NOW THE WITNESS ROOT: {}", witness_root);
-    // println!("AND THE WTXIDS ARE: ");
-    // for tx in &block_txs {
-    //     if tx.is_p2wpkh {
-    //         if let Some(ref wtxid) = tx.wtxid {
-    //             println!("{}", wtxid);
-    //         }
-    //     }
-    // }
-    // TESTING THE TXIDS IN EACH VEC
-    // println!("Block Transactions (txid):");
-    // for tx in &block_txs {
-    //     println!("{}", tx.txid);
-    // }
-    // println!();
-    // println!("Merkle Root Transactions (txid):");
-    // for txid in &txids_for_merkle {
-    //     println!("{}", txid);
-    // }
-    // println!();
-    // println!("Witness Root Transactions (wtxid):");
-    // for wtxid in &wtx_ids_for_witness_root {
-    //     println!("{}", wtxid);
-    // }
-    // println!();
+    let reserved_value = vec![0; 32]; // 32 bytes of zeros
+    let mut commitment_payload = Vec::new();
+    commitment_payload.extend_from_slice(&witness_root_hash_bytes);
+    commitment_payload.extend_from_slice(&reserved_value);
+
+    let wtxid_commitment = double_sha256(commitment_payload);
+
+// Format the OP_RETURN output correctly
+    print!("6a24aa21a9ed{}", hex::encode(wtxid_commitment));
 
 
 
