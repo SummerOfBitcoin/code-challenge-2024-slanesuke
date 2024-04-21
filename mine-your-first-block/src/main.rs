@@ -1362,7 +1362,8 @@ fn main() {
     block_txs.sort_by(|a, b| b.fee.cmp(&a.fee));
 
     // Get the wtxids for the witness root
-    let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
+    //let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
+    let mut wtx_ids_for_witness_root: Vec<String> = Vec::new();
     for tx in &block_txs {
         if tx.is_p2wpkh {
             if let Some(ref wtxid) = tx.wtxid {
@@ -1370,8 +1371,7 @@ fn main() {
             }
         }
     }
-    // // Calculate the witness root
-    // let witness_root = get_merkle_root(wtx_ids_for_witness_root.clone());
+
 
     // Generate coinbase tx
     let coinbase_tx = create_coinbase_tx(total_fees, wtx_ids_for_witness_root.clone());
@@ -1396,25 +1396,6 @@ fn main() {
     // Use block_txs to generate Merkle root
     let txids_for_merkle = block_txs.iter().map(|tx| tx.txid.clone()).collect::<Vec<_>>();
     let merkle_root = get_merkle_root(txids_for_merkle.clone());
-
-//     // Testing the witness root calculation in main
-//     let  witness_root_hash = get_merkle_root(wtx_ids_for_witness_root.clone());
-//     let mut witness_root_hash_bytes = hex::decode(witness_root_hash).unwrap();
-//     //witness_root_hash_bytes.reverse(); // Reverse to match endianness
-//
-//     let reserved_value = vec![0; 32]; // 32 bytes of zeros
-//     let mut commitment_payload = Vec::new();
-//     commitment_payload.extend_from_slice(&witness_root_hash_bytes);
-//     commitment_payload.extend_from_slice(&reserved_value);
-//
-//     let wtxid_commitment = double_sha256(commitment_payload);
-//
-// // Format the OP_RETURN output correctly
-//     print!("6a24aa21a9ed{}", hex::encode(wtxid_commitment));
-
-
-
-
 
     // Start Mining!
     loop {
@@ -1445,10 +1426,16 @@ fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: V
     fs::write("../output.txt", "").unwrap();  // Clear the output file
     append_to_file("../output.txt", &hex::encode(serialized_header)).unwrap();
     append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
+    //println!("TXIDS:::::");
     for tx in block_txs {
-        //println!("{}", &tx.txid);
+        // println!("{}", &tx.txid);
         append_to_file("../output.txt", &tx.txid).unwrap();
     }
+    // println!("wtxids::::::");
+    // for tx in block_txs {
+    //     println!("{}", &tx.wtxid.clone().unwrap_or_default());
+    //     // append_to_file("../output.txt", &tx.txid).unwrap();
+    // }
 }
 
 
