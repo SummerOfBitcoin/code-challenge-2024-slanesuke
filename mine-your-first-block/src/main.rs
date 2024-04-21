@@ -141,24 +141,9 @@ fn create_coinbase_tx(total_tx_fee: u64, witness_root: String) -> Transaction {
     // Output count 2 for the wtxid stuff
     // the witness root hash gets hashed with the witness reserve value and put into
     // the scriptpubkey of the second output
-    // I believe the value will be 0
-    // Need to concantinate teh witness root with the witness reserved value then hash it
-    // let op_return_prefix = "6a24aa21a9ed";
-    // let wtxid_commitment = witness_root + &witness_reserved_value;
-    // let wtxid_commitment_hash = double_sha256(hex::decode(wtxid_commitment).unwrap());
-    // let wtxid_commitment_hex = hex::encode(wtxid_commitment_hash);
-    // let scriptpubkey_for_wtxid = format!("{}{}", op_return_prefix, wtxid_commitment_hex);
-    // coinbase_tx.vout.push(Vout {
-    //     scriptpubkey: scriptpubkey_for_wtxid,
-    //     scriptpubkey_asm: "".to_string(),
-    //     scriptpubkey_type: "".to_string(),
-    //     scriptpubkey_address: None,
-    //     value: 0,
-    // });
     // Made some edits to work directly with bytes so i didnt have to decode and encode
     //let op_return_prefix = vec![0x6a, 0x24, 0xaa, 0x21, 0xa9, 0xed];
-    let mut witness_root_bytes = hex::decode(witness_root).unwrap();
-    witness_root_bytes.reverse();
+    let witness_root_bytes = hex::decode(witness_root).unwrap();
     let witness_reserved_value_bytes = hex::decode(witness_reserved_value).unwrap();
 
     let mut wtxid_commitment = Vec::new();
@@ -169,9 +154,10 @@ fn create_coinbase_tx(total_tx_fee: u64, witness_root: String) -> Transaction {
 
     // let mut scriptpubkey_for_wtxid = op_return_prefix;
     // scriptpubkey_for_wtxid.extend(wtxid_commitment_hash);
+
     let scriptpubkey_for_wtxid = format!("{}{}", "6a24aa21a9ed", hex::encode(wtxid_commitment_hash));
     coinbase_tx.vout.push(Vout {
-        scriptpubkey: hex::encode(scriptpubkey_for_wtxid),
+        scriptpubkey: scriptpubkey_for_wtxid,
         scriptpubkey_asm: "".to_string(),
         scriptpubkey_type: "".to_string(),
         scriptpubkey_address: None,
