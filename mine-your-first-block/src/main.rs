@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::{Debug};
 use serde::Deserialize;
 use serde_json;
@@ -143,8 +144,7 @@ fn create_coinbase_tx(total_tx_fee: u64, witness_root: String) -> Transaction {
     // the scriptpubkey of the second output
     // Made some edits to work directly with bytes so i didnt have to decode and encode
     //let op_return_prefix = vec![0x6a, 0x24, 0xaa, 0x21, 0xa9, 0xed];
-    let mut witness_root_bytes = hex::decode(witness_root).unwrap();
-    witness_root_bytes.reverse();
+    let witness_root_bytes = hex::decode(witness_root).unwrap();
     let witness_reserved_value_bytes = hex::decode(witness_reserved_value).unwrap();
 
     let mut wtxid_commitment = Vec::new();
@@ -1338,27 +1338,8 @@ fn  calculate_transaction_weight(tx: &Transaction)  ->  u64  {
     tx_weight
 }
 
-// ISSUE Block does not meet target difficulty
-// So my block hash is too big so maybe too many transations in a block?
+
 fn main() {
-    // let tx = "../mempool/0a07736090b0677920c14d64e12e81cbb5e9d2fbcfeea536cda7d571b6d4607f.json";
-    // let tx = "../mempool/0af55b69fab549b98d1f7ec5100b738dad4b520384b3b8f9ff38b25ad1e2940a.json";
-    // let tx = "../mempool/0cc8c9b6ad835795d3be9a2b2f7bef702c6aafefea76b30bc29e32029c621817.json";
-    // let deserialized_tx = deserialize_tx(tx);
-    // let mut transaction = deserialized_tx.clone();
-    // let serialized_wtx = serialized_segwit_tx(&deserialized_tx);
-    // let serialized_tx = serialize_tx(&deserialized_tx);
-    //
-    // println!("Deserialized segwit tx: {}", serialized_wtx);
-    // println!();
-    // println!("Deserialized Tx: {}", serialized_tx);
-
-
-
-
-
-
-    // UNCOMMENT TO RUN THE WORKING VERSION
     // Path to the mempool folder
     let mempool_path = "../mempool";
 
@@ -1455,19 +1436,37 @@ fn main() {
     }
 }
 
+// fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: Vec<String>, block_txs: &[TransactionForProcessing]) {
+//     fs::write("../output.txt", "").unwrap();  // Clear the output file
+//     append_to_file("../output.txt", &hex::encode(serialized_header)).unwrap();
+//     append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
+//     // for tx in block_txs {
+//     //     println!("{}", &tx.txid);
+//     //     append_to_file("../output.txt", &tx.txid).unwrap();
+//     // }
+//     //let len = txs.len() / 2;
+//     for txids in txs {
+//         //println!("{}", txids);
+//         append_to_file("../output.txt", &txids).unwrap();
+//     }
+// }
+
 fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: Vec<String>, block_txs: &[TransactionForProcessing]) {
     fs::write("../output.txt", "").unwrap();  // Clear the output file
     append_to_file("../output.txt", &hex::encode(serialized_header)).unwrap();
     append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
-    // for tx in block_txs {
-    //     println!("{}", &tx.txid);
-    //     append_to_file("../output.txt", &tx.txid).unwrap();
-    // }
-    //let len = txs.len() / 2;
-    for txids in txs {
-        //println!("{}", txids);
-        append_to_file("../output.txt", &txids).unwrap();
+
+    // Create a hashmap of txid to transaction for easy lookup
+    let tx_map: HashMap<String, &TransactionForProcessing> = block_txs.iter().map(|tx| (tx.txid.clone(), tx)).collect();
+
+    // Write the transactions in the order they appear in txs
+    for txid in txs {
+        if let Some(tx) = tx_map.get(&txid) {
+            append_to_file("../output.txt", &tx.txid).unwrap();
+        }
     }
 }
+
+
 
 
