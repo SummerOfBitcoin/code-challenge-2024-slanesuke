@@ -237,17 +237,6 @@ fn serialize_block_header(block_header: &BlockHeader) -> Vec<u8> {
 
 
 fn get_merkle_root(txids: Vec<String>) -> String {
-    // the txids are in little endian so to get the merkle root i need to put them back in natural byte
-    // order
-    // This is done by decoding the hex string to bytes then reversing the bytes and encoding them back
-    // I found this helpful online
-    // let mut be_txid = txids.iter()
-    //     .map(|txid| {
-    //         let decoded_id = hex::decode(txid).unwrap();
-    //         let reversed_id = decoded_id.iter().rev().cloned().collect::<Vec<u8>>();
-    //         double_sha256(reversed_id)
-    //     }).collect::<Vec<[u8; 32]>>(); // fixed size array of 32 bytes
-
     // WTF I converted it to big endian but it gave me the wrong merkle root so
     // I will just keep it in little endian and reverse the bytes when hashing (ithink)
     let mut be_txid = txids.iter()
@@ -1313,13 +1302,6 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProcessin
     Ok(valid_txs)
 }
 
-/// This function will calculate the hash of the block header!!!
-// Test this fn next
-fn calculate_hash(block_header: Vec<u8>) -> String {
-    let hash = double_sha256(block_header);
-    hex::encode(hash)
-}
-
 /// This function takes the target and hash, converts them to a big int, then compares
 fn hash_meets_difficulty_target(hash: &str) -> bool {
     let target_string = "0000ffff00000000000000000000000000000000000000000000000000000000";
@@ -1387,41 +1369,72 @@ fn main() {
             }
         }
     }
-    // for tx in &block_txs {
-    //     txids_for_merkle.push(tx.txid.clone());  // Use txid for Merkle root
-    //     if tx.is_p2wpkh {
-    //         if let Some(ref wtxid) = tx.wtxid {
-    //             wtx_ids_for_witness_root.push(wtxid.clone());  // Collect wtxid if valid
-    //         }
-    //     }
-    // }
-
-
-
     // Calculate the witness root
-    let witness_root = get_merkle_root(wtx_ids_for_witness_root);
+    let witness_root = get_merkle_root(wtx_ids_for_witness_root.clone());
 
     // Generate coinbase tx
-    let coinbase_tx = create_coinbase_tx(total_fees, witness_root);
+    let coinbase_tx = create_coinbase_tx(total_fees, witness_root.clone());
     let serialized_cb_tx = serialize_tx(&coinbase_tx);
     let cd_tx_bytes = hex::decode(serialized_cb_tx.clone()).unwrap();
-    //println!("Coinbase tx: {}", serialized_cb_tx);
-
     // coinbase txid
     let coinbase_txid = double_sha256(cd_tx_bytes.clone());
     let mut coinbase_txid_le = coinbase_txid.to_vec();
     coinbase_txid_le.reverse();
     let coinbase_txid = hex::encode(coinbase_txid_le);
 
+    // Insert the coinbase transaction at the beginning of block_txs
+    let coinbase_tx_for_processing = TransactionForProcessing {
+        transaction: coinbase_tx,
+        txid: coinbase_txid.clone(),
+        wtxid: None,
+        fee: 0,
+        is_p2wpkh: false,
+    };
+    block_txs.insert(0, coinbase_tx_for_processing);
+
+    // Use block_txs to generate Merkle root
+    let txids_for_merkle = block_txs.iter().map(|tx| tx.txid.clone()).collect::<Vec<_>>();
+    let merkle_root = get_merkle_root(txids_for_merkle.clone());
+
     // Get the txids for the merkle root
-    let mut txids_for_merkle = vec![coinbase_txid];
-    for tx in &block_txs {
-        txids_for_merkle.push(tx.txid.clone());  // Use txid for Merkle root
-    }
+    // let mut txids_for_merkle = vec![coinbase_txid];
+    // for tx in &block_txs {
+    //     txids_for_merkle.push(tx.txid.clone());  // Use txid for Merkle root
+    // }
 
     // Calculate the merkle root
-    let merkle_root = get_merkle_root(txids_for_merkle.clone());
-    println!("Merkle Root: {}", merkle_root);
+    //let merkle_root = get_merkle_root(txids_for_merkle.clone());
+    // println!("Merkle Root: {}", merkle_root);
+    // println!("AND THE TXIDS ARE: ");
+    // for tx in &txids_for_merkle {
+    //     println!("{}", &tx);
+    // }
+    // println!("NOW THE WITNESS ROOT: {}", witness_root);
+    // println!("AND THE WTXIDS ARE: ");
+    // for tx in &block_txs {
+    //     if tx.is_p2wpkh {
+    //         if let Some(ref wtxid) = tx.wtxid {
+    //             println!("{}", wtxid);
+    //         }
+    //     }
+    // }
+    // TESTING THE TXIDS IN EACH VEC
+    // println!("Block Transactions (txid):");
+    // for tx in &block_txs {
+    //     println!("{}", tx.txid);
+    // }
+    // println!();
+    // println!("Merkle Root Transactions (txid):");
+    // for txid in &txids_for_merkle {
+    //     println!("{}", txid);
+    // }
+    // println!();
+    // println!("Witness Root Transactions (wtxid):");
+    // for wtxid in &wtx_ids_for_witness_root {
+    //     println!("{}", wtxid);
+    // }
+    // println!();
+
 
 
     // Start Mining!
@@ -1453,15 +1466,15 @@ fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: V
     fs::write("../output.txt", "").unwrap();  // Clear the output file
     append_to_file("../output.txt", &hex::encode(serialized_header)).unwrap();
     append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
-    // for tx in block_txs {
-    //     println!("{}", &tx.txid);
-    //     append_to_file("../output.txt", &tx.txid).unwrap();
-    // }
-    //let len = txs.len() / 2;
-    for txids in txs {
-        //println!("{}", txids);
-        append_to_file("../output.txt", &txids).unwrap();
+    for tx in block_txs {
+        //println!("{}", &tx.txid);
+        append_to_file("../output.txt", &tx.txid).unwrap();
     }
+    //let len = txs.len() / 2;
+    // for txids in txs {
+    //     //println!("{}", txids);
+    //     append_to_file("../output.txt", &txids).unwrap();
+    // }
 }
 
 
