@@ -157,7 +157,7 @@ fn create_coinbase_tx(total_tx_fee: u64, witness_root_vec: Vec<String>) -> Trans
 
 // Format the OP_RETURN output correctly
     let scriptpubkey_for_wtxid = format!("6a24aa21a9ed{}", hex::encode(wtxid_commitment));
-    let scriptpubkey_for_wtxid = "6a24aa21a9ed1e25fb0a02cdcbe624b0ef55a26e0091d06a04575d163fc6e00d482ef23f2c31".to_string();
+    //let scriptpubkey_for_wtxid = "6a24aa21a9ed1e25fb0a02cdcbe624b0ef55a26e0091d06a04575d163fc6e00d482ef23f2c31".to_string();
     coinbase_tx.vout.push(Vout {
         scriptpubkey: scriptpubkey_for_wtxid,
         scriptpubkey_asm: "".to_string(),
@@ -1385,9 +1385,9 @@ fn main() {
 
     // Insert the coinbase transaction at the beginning of block_txs
     let coinbase_tx_for_processing = TransactionForProcessing {
-        transaction: coinbase_tx,
+        transaction: coinbase_tx.clone(),
         txid: coinbase_txid.clone(),
-        wtxid: None,
+        wtxid: Some("0000000000000000000000000000000000000000000000000000000000000000".to_string()),
         fee: 0,
         is_p2wpkh: false,
     };
@@ -1397,20 +1397,22 @@ fn main() {
     let txids_for_merkle = block_txs.iter().map(|tx| tx.txid.clone()).collect::<Vec<_>>();
     let merkle_root = get_merkle_root(txids_for_merkle.clone());
 
-    // Testing the witness root calculation in main
-    let  witness_root_hash = get_merkle_root(wtx_ids_for_witness_root.clone());
-    let mut witness_root_hash_bytes = hex::decode(witness_root_hash).unwrap();
-    //witness_root_hash_bytes.reverse(); // Reverse to match endianness
+//     // Testing the witness root calculation in main
+//     let  witness_root_hash = get_merkle_root(wtx_ids_for_witness_root.clone());
+//     let mut witness_root_hash_bytes = hex::decode(witness_root_hash).unwrap();
+//     //witness_root_hash_bytes.reverse(); // Reverse to match endianness
+//
+//     let reserved_value = vec![0; 32]; // 32 bytes of zeros
+//     let mut commitment_payload = Vec::new();
+//     commitment_payload.extend_from_slice(&witness_root_hash_bytes);
+//     commitment_payload.extend_from_slice(&reserved_value);
+//
+//     let wtxid_commitment = double_sha256(commitment_payload);
+//
+// // Format the OP_RETURN output correctly
+//     print!("6a24aa21a9ed{}", hex::encode(wtxid_commitment));
 
-    let reserved_value = vec![0; 32]; // 32 bytes of zeros
-    let mut commitment_payload = Vec::new();
-    commitment_payload.extend_from_slice(&witness_root_hash_bytes);
-    commitment_payload.extend_from_slice(&reserved_value);
 
-    let wtxid_commitment = double_sha256(commitment_payload);
-
-// Format the OP_RETURN output correctly
-    print!("6a24aa21a9ed{}", hex::encode(wtxid_commitment));
 
 
 
