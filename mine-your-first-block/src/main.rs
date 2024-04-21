@@ -1378,23 +1378,22 @@ fn main() {
     block_txs.sort_by(|a, b| b.fee.cmp(&a.fee));
 
     // Get the wtxids for the witness root
-    let mut txids_for_merkle = vec![];
     let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
-    // for tx in &block_txs {
-    //     if tx.is_p2wpkh {
-    //         if let Some(ref wtxid) = tx.wtxid {
-    //             wtx_ids_for_witness_root.push(wtxid.clone());  // Collect wtxid if valid
-    //         }
-    //     }
-    // }
     for tx in &block_txs {
-        txids_for_merkle.push(tx.txid.clone());  // Use txid for Merkle root
         if tx.is_p2wpkh {
             if let Some(ref wtxid) = tx.wtxid {
                 wtx_ids_for_witness_root.push(wtxid.clone());  // Collect wtxid if valid
             }
         }
     }
+    // for tx in &block_txs {
+    //     txids_for_merkle.push(tx.txid.clone());  // Use txid for Merkle root
+    //     if tx.is_p2wpkh {
+    //         if let Some(ref wtxid) = tx.wtxid {
+    //             wtx_ids_for_witness_root.push(wtxid.clone());  // Collect wtxid if valid
+    //         }
+    //     }
+    // }
 
 
 
@@ -1414,13 +1413,11 @@ fn main() {
     let coinbase_txid = hex::encode(coinbase_txid_le);
 
     // Get the txids for the merkle root
-    //let mut txids_for_merkle = vec![coinbase_txid];
+    let mut txids_for_merkle = vec![coinbase_txid];
+    for tx in &block_txs {
+        txids_for_merkle.push(tx.txid.clone());  // Use txid for Merkle root
+    }
 
-
-    // for tx in &block_txs {
-    //     txids_for_merkle.push(tx.txid.clone());  // Use txid for Merkle root
-    // }
-    txids_for_merkle.insert(0, coinbase_txid.clone());
     // Calculate the merkle root
     let merkle_root = get_merkle_root(txids_for_merkle.clone());
     println!("Merkle Root: {}", merkle_root);
@@ -1441,8 +1438,8 @@ fn main() {
 
         // Check if the hash meets the target
         if hash_meets_difficulty_target(&block_hash) {
-            write_block_to_file(&serialized_block_header, &cd_tx_bytes, &block_txs);
-            //write_block_to_file(&serialized_block_header, &cd_tx_bytes, txids_for_merkle.clone(), &block_txs);
+            //write_block_to_file(&serialized_block_header, &cd_tx_bytes, &block_txs);
+            write_block_to_file(&serialized_block_header, &cd_tx_bytes, txids_for_merkle.clone(), &block_txs);
             println!("Success, the block met the target difficulty!");
             break;
         } else {
@@ -1451,29 +1448,29 @@ fn main() {
     }
 }
 
-// fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: Vec<String>, block_txs: &[TransactionForProcessing]) {
-//     fs::write("../output.txt", "").unwrap();  // Clear the output file
-//     append_to_file("../output.txt", &hex::encode(serialized_header)).unwrap();
-//     append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
-//     // for tx in block_txs {
-//     //     println!("{}", &tx.txid);
-//     //     append_to_file("../output.txt", &tx.txid).unwrap();
-//     // }
-//     //let len = txs.len() / 2;
-//     for txids in txs {
-//         //println!("{}", txids);
-//         append_to_file("../output.txt", &txids).unwrap();
-//     }
-// }
-fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], block_txs: &[TransactionForProcessing]) {
+fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: Vec<String>, block_txs: &[TransactionForProcessing]) {
     fs::write("../output.txt", "").unwrap();  // Clear the output file
     append_to_file("../output.txt", &hex::encode(serialized_header)).unwrap();
     append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
-
-    for tx in block_txs {
-        append_to_file("../output.txt", &tx.txid).unwrap();
+    // for tx in block_txs {
+    //     println!("{}", &tx.txid);
+    //     append_to_file("../output.txt", &tx.txid).unwrap();
+    // }
+    //let len = txs.len() / 2;
+    for txids in txs {
+        //println!("{}", txids);
+        append_to_file("../output.txt", &txids).unwrap();
     }
 }
+// fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], block_txs: &[TransactionForProcessing]) {
+//     fs::write("../output.txt", "").unwrap();  // Clear the output file
+//     append_to_file("../output.txt", &hex::encode(serialized_header)).unwrap();
+//     append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
+//
+//     for tx in block_txs {
+//         append_to_file("../output.txt", &tx.txid).unwrap();
+//     }
+// }
 
 
 
