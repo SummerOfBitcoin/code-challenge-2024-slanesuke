@@ -1378,14 +1378,25 @@ fn main() {
     block_txs.sort_by(|a, b| b.fee.cmp(&a.fee));
 
     // Get the wtxids for the witness root
+    let mut txids_for_merkle = vec![];
     let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
+    // for tx in &block_txs {
+    //     if tx.is_p2wpkh {
+    //         if let Some(ref wtxid) = tx.wtxid {
+    //             wtx_ids_for_witness_root.push(wtxid.clone());  // Collect wtxid if valid
+    //         }
+    //     }
+    // }
     for tx in &block_txs {
+        txids_for_merkle.push(tx.txid.clone());  // Use txid for Merkle root
         if tx.is_p2wpkh {
             if let Some(ref wtxid) = tx.wtxid {
                 wtx_ids_for_witness_root.push(wtxid.clone());  // Collect wtxid if valid
             }
         }
     }
+
+
 
     // Calculate the witness root
     let witness_root = get_merkle_root(wtx_ids_for_witness_root);
@@ -1403,12 +1414,13 @@ fn main() {
     let coinbase_txid = hex::encode(coinbase_txid_le);
 
     // Get the txids for the merkle root
-    let mut txids_for_merkle = vec![coinbase_txid];
+    //let mut txids_for_merkle = vec![coinbase_txid];
 
 
-    for tx in &block_txs {
-        txids_for_merkle.push(tx.txid.clone());  // Use txid for Merkle root
-    }
+    // for tx in &block_txs {
+    //     txids_for_merkle.push(tx.txid.clone());  // Use txid for Merkle root
+    // }
+    txids_for_merkle.insert(0, coinbase_txid.clone());
     // Calculate the merkle root
     let merkle_root = get_merkle_root(txids_for_merkle.clone());
     println!("Merkle Root: {}", merkle_root);
