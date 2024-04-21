@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fmt::{Debug};
 use serde::Deserialize;
 use serde_json;
@@ -79,7 +78,7 @@ struct BlockHeader {
 }
 
 /// This function will return the coinbase transaction
-fn create_coinbase_tx(total_tx_fee: u64, witness_root: String) -> Transaction {
+fn create_coinbase_tx(total_tx_fee: u64, witness_root_vec: Vec<String>) -> Transaction {
     let mut coinbase_tx = Transaction {
         version: 0,
         locktime: 0,
@@ -143,21 +142,21 @@ fn create_coinbase_tx(total_tx_fee: u64, witness_root: String) -> Transaction {
     // the witness root hash gets hashed with the witness reserve value and put into
     // the scriptpubkey of the second output
     // Made some edits to work directly with bytes so i didnt have to decode and encode
-    //let op_return_prefix = vec![0x6a, 0x24, 0xaa, 0x21, 0xa9, 0xed];
-    let mut witness_root_bytes = hex::decode(witness_root).unwrap();
-    let witness_reserved_value_bytes = hex::decode(witness_reserved_value).unwrap();
-    witness_root_bytes.reverse();
 
-    let mut wtxid_commitment = Vec::new();
-    wtxid_commitment.extend(witness_root_bytes);
-    wtxid_commitment.extend(witness_reserved_value_bytes);
 
-    let wtxid_commitment_hash = double_sha256(wtxid_commitment);
+    let witness_root_hash = get_merkle_root(witness_root_vec);
+    let mut witness_root_hash_bytes = hex::decode(witness_root_hash).unwrap();
+    witness_root_hash_bytes.reverse(); // Reverse to match endianness maybe dont need this??
 
-    // let mut scriptpubkey_for_wtxid = op_return_prefix;
-    // scriptpubkey_for_wtxid.extend(wtxid_commitment_hash);
+    let reserved_value = vec![0; 32]; // 32 bytes of zeros
+    let mut commitment_payload = Vec::new();
+    commitment_payload.extend_from_slice(&witness_root_hash_bytes);
+    commitment_payload.extend_from_slice(&reserved_value);
 
-    let scriptpubkey_for_wtxid = format!("{}{}", "6a24aa21a9ed", hex::encode(wtxid_commitment_hash));
+    let wtxid_commitment = double_sha256(commitment_payload);
+
+// Format the OP_RETURN output correctly
+    let scriptpubkey_for_wtxid = format!("6a24aa21a9ed{}", hex::encode(wtxid_commitment));
     coinbase_tx.vout.push(Vout {
         scriptpubkey: scriptpubkey_for_wtxid,
         scriptpubkey_asm: "".to_string(),
@@ -1339,7 +1338,7 @@ fn main() {
     // Initializing block weight
     let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
     let mut total_weight = 0u64;
-    let max_block_weight = 2000000u64;
+    let max_block_weight = 4000000u64;
     let mut total_fees = 0u64;
 
     // Sort transactions by fee in descending order before processing
@@ -1370,11 +1369,11 @@ fn main() {
             }
         }
     }
-    // Calculate the witness root
-    let witness_root = get_merkle_root(wtx_ids_for_witness_root.clone());
+    // // Calculate the witness root
+    // let witness_root = get_merkle_root(wtx_ids_for_witness_root.clone());
 
     // Generate coinbase tx
-    let coinbase_tx = create_coinbase_tx(total_fees, witness_root.clone());
+    let coinbase_tx = create_coinbase_tx(total_fees, wtx_ids_for_witness_root);
     let serialized_cb_tx = serialize_tx(&coinbase_tx);
     let cd_tx_bytes = hex::decode(serialized_cb_tx.clone()).unwrap();
     // coinbase txid
