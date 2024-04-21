@@ -144,8 +144,9 @@ fn create_coinbase_tx(total_tx_fee: u64, witness_root: String) -> Transaction {
     // the scriptpubkey of the second output
     // Made some edits to work directly with bytes so i didnt have to decode and encode
     //let op_return_prefix = vec![0x6a, 0x24, 0xaa, 0x21, 0xa9, 0xed];
-    let witness_root_bytes = hex::decode(witness_root).unwrap();
+    let mut witness_root_bytes = hex::decode(witness_root).unwrap();
     let witness_reserved_value_bytes = hex::decode(witness_reserved_value).unwrap();
+    witness_root_bytes.reverse();
 
     let mut wtxid_commitment = Vec::new();
     wtxid_commitment.extend(witness_root_bytes);
@@ -1470,11 +1471,6 @@ fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: V
         //println!("{}", &tx.txid);
         append_to_file("../output.txt", &tx.txid).unwrap();
     }
-    //let len = txs.len() / 2;
-    // for txids in txs {
-    //     //println!("{}", txids);
-    //     append_to_file("../output.txt", &txids).unwrap();
-    // }
 }
 
 
