@@ -1426,8 +1426,8 @@ fn main() {
 
         // Check if the hash meets the target
         if hash_meets_difficulty_target(&block_hash) {
-            //write_block_to_file(&serialized_block_header, &cd_tx_bytes, &block_txs);
-            write_block_to_file(&serialized_block_header, &cd_tx_bytes, txids_for_merkle.clone(), &block_txs);
+            write_block_to_file(&serialized_block_header, &cd_tx_bytes, &block_txs);
+            //write_block_to_file(&serialized_block_header, &cd_tx_bytes, txids_for_merkle.clone(), &block_txs);
             println!("Success, the block met the target difficulty!");
             break;
         } else {
@@ -1450,22 +1450,16 @@ fn main() {
 //         append_to_file("../output.txt", &txids).unwrap();
 //     }
 // }
-
-fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: Vec<String>, block_txs: &[TransactionForProcessing]) {
+fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], block_txs: &[TransactionForProcessing]) {
     fs::write("../output.txt", "").unwrap();  // Clear the output file
     append_to_file("../output.txt", &hex::encode(serialized_header)).unwrap();
     append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
 
-    // Create a hashmap of txid to transaction for easy lookup
-    let tx_map: HashMap<String, &TransactionForProcessing> = block_txs.iter().map(|tx| (tx.txid.clone(), tx)).collect();
-
-    // Write the transactions in the order they appear in txs
-    for txid in txs {
-        if let Some(tx) = tx_map.get(&txid) {
-            append_to_file("../output.txt", &tx.txid).unwrap();
-        }
+    for tx in block_txs {
+        append_to_file("../output.txt", &tx.txid).unwrap();
     }
 }
+
 
 
 
