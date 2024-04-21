@@ -157,7 +157,7 @@ fn create_coinbase_tx(total_tx_fee: u64, witness_root_vec: Vec<String>) -> Trans
 
 // Format the OP_RETURN output correctly
     let scriptpubkey_for_wtxid = format!("6a24aa21a9ed{}", hex::encode(wtxid_commitment));
-    let scriptpubkey_for_wtxid = "6a24aa21a9ed5215526c1145b0f86bf0894d1fd715ce67ed5ebf4aa7327419520c3a1851253a".to_string();
+    let scriptpubkey_for_wtxid = "6a24aa21a9ed1e25fb0a02cdcbe624b0ef55a26e0091d06a04575d163fc6e00d482ef23f2c31".to_string();
     coinbase_tx.vout.push(Vout {
         scriptpubkey: scriptpubkey_for_wtxid,
         scriptpubkey_asm: "".to_string(),
@@ -1400,7 +1400,7 @@ fn main() {
     // Testing the witness root calculation in main
     let  witness_root_hash = get_merkle_root(wtx_ids_for_witness_root.clone());
     let mut witness_root_hash_bytes = hex::decode(witness_root_hash).unwrap();
-    witness_root_hash_bytes.reverse(); // Reverse to match endianness
+    //witness_root_hash_bytes.reverse(); // Reverse to match endianness
 
     let reserved_value = vec![0; 32]; // 32 bytes of zeros
     let mut commitment_payload = Vec::new();
