@@ -1374,6 +1374,9 @@ fn main() {
         total_fees += tx.fee;
     }
 
+    // Sorting the transactions from fees in desencding order
+    block_txs.sort_by(|a, b| b.fee.cmp(&a.fee));
+
     // Get the wtxids for the witness root
     let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
     for tx in &block_txs {
@@ -1408,7 +1411,7 @@ fn main() {
     }
     // Calculate the merkle root
     let merkle_root = get_merkle_root(txids_for_merkle.clone());
-    //println!("Merkle Root: {}", merkle_root);
+    println!("Merkle Root: {}", merkle_root);
 
 
     // Start Mining!
