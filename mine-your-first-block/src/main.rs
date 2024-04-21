@@ -1249,6 +1249,7 @@ fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProcessin
                                 is_valid = true;
                                 wtxid = Some(wtx_id);
                                 txid = tx_id;
+
                             },
                             _ => continue,
                         }
@@ -1355,7 +1356,7 @@ fn main() {
     // Initializing block weight
     let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
     let mut total_weight = 0u64;
-    let max_block_weight = 4000000u64;
+    let max_block_weight = 2000000u64;
     let mut total_fees = 0u64;
 
     // Sort transactions by fee in descending order before processing
