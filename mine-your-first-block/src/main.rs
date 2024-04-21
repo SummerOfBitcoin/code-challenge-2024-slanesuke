@@ -146,7 +146,7 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
 
     let witness_root_hash = get_merkle_root(witness_root_vec);
     let mut witness_root_hash_bytes = hex::decode(witness_root_hash).unwrap();
-    witness_root_hash_bytes.reverse(); // Reverse to match endianness maybe dont need this??
+    //witness_root_hash_bytes.reverse(); // Reverse to match endianness maybe dont need this??
 
     let reserved_value = vec![0; 32]; // 32 bytes of zeros
     let mut commitment_payload = Vec::new();
@@ -1433,11 +1433,11 @@ fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: V
         append_to_file("../output.txt", &tx.txid).unwrap();
     }
 
-    // for tx in block_txs {
-    //     if let Some(ref wtxid) = tx.wtxid {
-    //         println!("wtxid: {}, txid: {}", wtxid, tx.txid);
-    //     }
-    // }
+    for tx in block_txs {
+        if let Some(ref wtxid) = tx.wtxid {
+            println!("wtxid: {}, txid: {}", wtxid, tx.txid);
+        }
+    }
 }
 
 
