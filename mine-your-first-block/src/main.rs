@@ -1382,14 +1382,14 @@ fn main() {
     let cb_txid_bytes = hex::decode(serialized_cb_tx_for_txid).unwrap();
     let coinbase_txid = double_sha256(cb_txid_bytes.clone());
     let mut coinbase_txid_le = coinbase_txid.to_vec();
-    //coinbase_txid_le.reverse();
+    coinbase_txid_le.reverse();
     let coinbase_txid = hex::encode(coinbase_txid_le);
 
     // Insert the coinbase transaction at the beginning of block_txs
     let coinbase_tx_for_processing = TransactionForProcessing {
         transaction: coinbase_tx.clone(),
         txid: coinbase_txid.clone(),
-        wtxid: Some("0000000000000000000000000000000000000000000000000000000000000000".to_string()),
+        wtxid: None,
         fee: 0,
         is_p2wpkh: false,
     };
