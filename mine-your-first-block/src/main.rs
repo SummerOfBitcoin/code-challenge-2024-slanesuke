@@ -143,7 +143,7 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
     // the witness root hash gets hashed with the witness reserve value and put into
     // the scriptpubkey of the second output
     // Made some edits to work directly with bytes so i didnt have to decode and encode
-    witness_root_vec.insert(0, witness_reserved_value.to_string());
+    witness_root_vec.insert(0, witness_reserved_value);
 
     let witness_root_hash = get_merkle_root(witness_root_vec);
     let concantinated_items = format!("{}{}", witness_root_hash, witness_reserved_value);
@@ -1428,9 +1428,9 @@ fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: V
     append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
     for tx in block_txs {
         append_to_file("../output.txt", &tx.txid).unwrap();
-        // if let Some(ref wtxid) = tx.wtxid {
-        //     println!("{}", wtxid);
-        // }
+        if let Some(ref wtxid) = tx.wtxid {
+            println!("{}", wtxid);
+        }
     }
 }
 
