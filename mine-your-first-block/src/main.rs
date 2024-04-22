@@ -146,7 +146,7 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
 
     let witness_root_hash = get_merkle_root(witness_root_vec);
     let mut witness_root_hash_bytes = hex::decode(witness_root_hash).unwrap();
-    witness_root_hash_bytes.reverse(); // Reverse to match endianness maybe dont need this??
+    //witness_root_hash_bytes.reverse(); // Reverse to match endianness maybe dont need this??
 
     let reserved_value = hex::decode(witness_reserved_value).unwrap();
     let mut commitment_payload = Vec::new();
@@ -181,15 +181,7 @@ fn construct_block_header(nonce: u32, merkle_root: String) -> BlockHeader {
         bits: 0x1f00ffff, // Hard coded 'bits' value
         nonce: 0,
     };
-    // The default block version using a BIP 9 bit field is 0b00100000000000000000000000000000.
-    // In hex this is 0x20000000 little endian
-    // let block_version = 0b00100000000000000000000000000000u32.to_le_bytes();
-    // let block_version_hex = hex::encode(block_version);
-    // block_header.version = block_version_hex.parse().unwrap();
 
-    // I chose to use block height 837122 for my block just becase that was the current block height
-    // at the time of my project (when i made my coinbase tx fn)
-    // So I will use the previous block hash of block 837121
     let prev_block_hash = "0000000000000000000205e5b86991b1b0a370fb7e2b7126d32de18e48e556c4";
     let decode_prev_block_hash = hex::decode(prev_block_hash).unwrap();
     let reversed_prev_block_hash = decode_prev_block_hash.iter().rev().cloned().collect::<Vec<u8>>();
@@ -1308,6 +1300,22 @@ fn  calculate_transaction_weight(tx: &Transaction)  ->  u64  {
 
 
 fn main() {
+
+    // let filename = "../mempool/0aac26114009989817ba396fbfcdb0ab2f2a51a30df5d134d3294aacb27e8f69.json";
+    // let serde_tx = deserialize_tx(filename);
+    // let serde_wtx = serialized_segwit_wtx(&serde_tx);
+    // //println!("{}", serde_wtx);
+    // let wtx_bytes = hex::decode(serde_wtx.clone()).unwrap();
+    // let wtxid_be = double_sha256(wtx_bytes);
+    // let mut wtxid_le = wtxid_be;
+    // wtxid_le.reverse();
+    // let wtxid = hex::encode(wtxid_le);
+    // // println!();
+    // // println!("{}", wtxid);
+
+
+
+    // Uncomment for the project to mine
     // Path to the mempool folder
     let mempool_path = "../mempool";
 
@@ -1323,7 +1331,7 @@ fn main() {
     // Initializing block weight
     let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
     let mut total_weight = 0u64;
-    let max_block_weight = 4000000u64;
+    let max_block_weight = 3000000u64;
     //let max_block_weight = 200000u64;
     let mut total_fees = 0u64;
 
@@ -1421,6 +1429,9 @@ fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: V
     append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
     for tx in block_txs {
         append_to_file("../output.txt", &tx.txid).unwrap();
+        // if let Some(ref wtxid) = tx.wtxid {
+        //     println!("{}", wtxid);
+        // }
     }
 }
 
