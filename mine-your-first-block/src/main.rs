@@ -145,21 +145,23 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
     witness_root_vec.insert(0, witness_reserved_value.to_string());
 
     let witness_root_hash = get_merkle_root(witness_root_vec);
-    let mut witness_root_hash_bytes = hex::decode(witness_root_hash).unwrap();
-    witness_root_hash_bytes.reverse(); // Reverse to match endianness maybe dont need this??
+    let concantinated_items = format!("{}{}", witness_root_hash, witness_reserved_value);
+    //let mut witness_root_hash_bytes = hex::decode(witness_root_hash).unwrap();
+    //witness_root_hash_bytes.reverse(); // Reverse to match endianness maybe dont need this??
 
-    let reserved_value = hex::decode(witness_reserved_value).unwrap();
-    let mut commitment_payload = Vec::new();
-    commitment_payload.extend_from_slice(&witness_root_hash_bytes);
-    commitment_payload.extend_from_slice(&reserved_value);
+    //let reserved_value = hex::decode(witness_reserved_value).unwrap();
+    //let mut commitment_payload = Vec::new();
+    //commitment_payload.extend_from_slice(&witness_root_hash_bytes);
+    //commitment_payload.extend_from_slice(&reserved_value);
 
-    let wtxid_commitment = double_sha256(commitment_payload);
-
+    //let wtxid_commitment = double_sha256(commitment_payload);
+    let wtxid_commitment_test =  double_sha256(hex::decode(concantinated_items).unwrap());
 // Format the OP_RETURN output correctly
-    let scriptpubkey_for_wtxid = format!("6a24aa21a9ed{}", hex::encode(wtxid_commitment));
+    //let scriptpubkey_for_wtxid = format!("6a24aa21a9ed{}", hex::encode(wtxid_commitment));
+    let scriptpubkey_for_wtxid_test = format!("6a24aa21a9ed{}", hex::encode(wtxid_commitment_test));
     //let scriptpubkey_for_wtxid = "6a24aa21a9ed1e25fb0a02cdcbe624b0ef55a26e0091d06a04575d163fc6e00d482ef23f2c31".to_string();
     coinbase_tx.vout.push(Vout {
-        scriptpubkey: scriptpubkey_for_wtxid,
+        scriptpubkey: scriptpubkey_for_wtxid_test,
         scriptpubkey_asm: "".to_string(),
         scriptpubkey_type: "".to_string(),
         scriptpubkey_address: None,
