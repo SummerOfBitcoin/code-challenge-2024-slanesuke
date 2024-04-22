@@ -1360,14 +1360,16 @@ fn main() {
 
     // Generate coinbase tx
     let coinbase_tx = create_coinbase_tx(total_fees, wtx_ids_for_witness_root.clone());
-    // let serialized_cb_tx = serialize_tx(&coinbase_tx);
     let serialized_cb_tx = serialized_segwit_tx(&coinbase_tx);
+    println!("Coinbase tx: {}", serialized_cb_tx);
     let cd_tx_bytes = hex::decode(serialized_cb_tx.clone()).unwrap();
     // coinbase txid
+    println!("Coinbase tx  befoore hash: {}", hex::encode(cd_tx_bytes.clone()));
     let coinbase_txid = double_sha256(cd_tx_bytes.clone());
     let mut coinbase_txid_le = coinbase_txid.to_vec();
     coinbase_txid_le.reverse();
     let coinbase_txid = hex::encode(coinbase_txid_le);
+    println!("Coinbase txid: {}", coinbase_txid);
 
     // Insert the coinbase transaction at the beginning of block_txs
     let coinbase_tx_for_processing = TransactionForProcessing {
