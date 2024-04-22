@@ -404,9 +404,9 @@ fn serialized_segwit_tx(transaction: &Transaction) -> String {
 
     // For the coinbase transaction in between the version and vin count I need to add the marker and flag
     // If the is_coinbase == true push 00 and 01
-    if transaction.vin[0].is_coinbase {
-        serialized_tx.push_str("0001");
-    }
+    // if transaction.vin[0].is_coinbase {
+    //     serialized_tx.push_str("0001");
+    // }
 
     // Serialize vin count and push the numb of inputs
     let vin_count = transaction.vin.len() as u64;
@@ -470,15 +470,15 @@ fn serialized_segwit_tx(transaction: &Transaction) -> String {
     // Need the witness to be added to the coinbase tx so if there is a witness field that is equal to
     // "0000000000000000000000000000000000000000000000000000000000000000" then push to the serialized tx
     // before the locktime
-    for vin in &transaction.vin {
-        if let Some(witness) = &vin.witness {
-            if witness[0] == "0000000000000000000000000000000000000000000000000000000000000000" {
-                serialized_tx.push_str("01");
-                serialized_tx.push_str("20");
-                serialized_tx.push_str(&witness[0]);
-            }
-        }
-    }
+    // for vin in &transaction.vin {
+    //     if let Some(witness) = &vin.witness {
+    //         if witness[0] == "0000000000000000000000000000000000000000000000000000000000000000" {
+    //             serialized_tx.push_str("01");
+    //             serialized_tx.push_str("20");
+    //             serialized_tx.push_str(&witness[0]);
+    //         }
+    //     }
+    // }
 
     // Finally add the locktime
     let lock = &transaction.locktime.to_le_bytes();
@@ -959,7 +959,7 @@ fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Stri
     let wtx_bytes = hex::decode(serialized_validwtx.clone())?;
     let wtxid_be = double_sha256(wtx_bytes);
     let mut wtxid_le = wtxid_be;
-    //wtxid_le.reverse();
+    wtxid_le.reverse();
     let wtxid = hex::encode(wtxid_le);
 
     // FOR TXID
@@ -1369,7 +1369,7 @@ fn main() {
     let coinbase_tx = create_coinbase_tx(total_fees, wtx_ids_for_witness_root.clone());
     let serialized_cb_tx = serialized_segwit_tx(&coinbase_tx);
 
-    println!("{:#?}", coinbase_tx);
+    //println!("{:#?}", coinbase_tx);
     let cd_tx_bytes = hex::decode(serialized_cb_tx.clone()).unwrap();
 
     // coinbase txid
