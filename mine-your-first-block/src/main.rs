@@ -143,9 +143,12 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
     // the witness root hash gets hashed with the witness reserve value and put into
     // the scriptpubkey of the second output
     // Made some edits to work directly with bytes so i didnt have to decode and encode
-    witness_root_vec.insert(0, witness_reserved_value);
+    witness_root_vec.insert(0, witness_reserved_value.clone());
 
     let witness_root_hash = get_merkle_root(witness_root_vec);
+    let mut witness_bytes = hex::decode(witness_root_hash).unwrap();
+    witness_bytes.reverse();
+    let witness_root_hash = hex::encode(witness_bytes);
     let concantinated_items = format!("{}{}", witness_root_hash, witness_reserved_value);
     //let mut witness_root_hash_bytes = hex::decode(witness_root_hash).unwrap();
     //witness_root_hash_bytes.reverse(); // Reverse to match endianness maybe dont need this??
