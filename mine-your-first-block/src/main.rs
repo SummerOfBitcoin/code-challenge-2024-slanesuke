@@ -101,7 +101,8 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
     //let extra_nonce_hex = hex::encode("SlanesukeSOBIntern2024".as_bytes());
 
     // let block_scriptsig = format!("{}{}", block_height_hex, extra_nonce_hex);
-    let block_scriptsig = block_height_hex;
+    // OP_PUSHBYTES_3 + block height (converted it on learnmeabitcoin)
+    let block_scriptsig = "03837122".to_string();
 
     // version is 4 bytes lil endian 01000000
     coinbase_tx.version = 0;
