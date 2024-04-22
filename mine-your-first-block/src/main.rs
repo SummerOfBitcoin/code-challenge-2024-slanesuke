@@ -96,14 +96,15 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
     let block_substidy_plus_fees: u64 = 625000000 + total_tx_fee;
 
     let scriptpubkey = "41049464205950188c29d377eebca6535e0f3699ce4069ecd77ffebfbd0bcf95e3c134cb7d2742d800a12df41413a09ef87a80516353a2f0a280547bb5512dc03da8ac".to_string();
+    let scriptpubkey = "76a91406f1b66fd59a34755c37a8f701f43e937cdbeb1388ac".to_string();
 
+    //let extra_nonce_hex = hex::encode("SlanesukeSOBIntern2024".as_bytes());
 
-    let extra_nonce_hex = hex::encode("SlanesukeSOBIntern2024".as_bytes());
-
-    let block_scriptsig = format!("{}{}", block_height_hex, extra_nonce_hex);
+    // let block_scriptsig = format!("{}{}", block_height_hex, extra_nonce_hex);
+    let block_scriptsig = block_height_hex;
 
     // version is 4 bytes lil endian 01000000
-    coinbase_tx.version = 1;
+    coinbase_tx.version = 0;
 
     // witness data
     let witness_reserved_value = "0000000000000000000000000000000000000000000000000000000000000000".to_string();
@@ -299,9 +300,9 @@ fn serialize_tx(transaction: &Transaction) -> String {
 
     // For the coinbase transaction in between the version and vin count I need to add the marker and flag
     // If the is_coinbase == true push 00 and 01
-    if transaction.vin[0].is_coinbase {
-        serialized_tx.push_str("0001");
-    }
+    // if transaction.vin[0].is_coinbase {
+    //     serialized_tx.push_str("0001");
+    // }
 
     // Serialize vin count
     let vin_count = transaction.vin.len() as u64;
@@ -373,15 +374,15 @@ fn serialize_tx(transaction: &Transaction) -> String {
     // Need the witness to be added to the coinbase tx so if there is a witness field that is equal to
     // "0000000000000000000000000000000000000000000000000000000000000000" then push to the serialized tx
     // before the locktime
-    for vin in &transaction.vin {
-        if let Some(witness) = &vin.witness {
-            if witness[0] == "0000000000000000000000000000000000000000000000000000000000000000" {
-                serialized_tx.push_str("01");
-                serialized_tx.push_str("20");
-                serialized_tx.push_str(&witness[0]);
-            }
-        }
-    }
+    // for vin in &transaction.vin {
+    //     if let Some(witness) = &vin.witness {
+    //         if witness[0] == "0000000000000000000000000000000000000000000000000000000000000000" {
+    //             serialized_tx.push_str("01");
+    //             serialized_tx.push_str("20");
+    //             serialized_tx.push_str(&witness[0]);
+    //         }
+    //     }
+    // }
 
 
     let lock = &transaction.locktime.to_le_bytes();
@@ -404,9 +405,9 @@ fn serialized_segwit_tx(transaction: &Transaction) -> String {
 
     // For the coinbase transaction in between the version and vin count I need to add the marker and flag
     // If the is_coinbase == true push 00 and 01
-    // if transaction.vin[0].is_coinbase {
-    //     serialized_tx.push_str("0001");
-    // }
+    if transaction.vin[0].is_coinbase {
+        serialized_tx.push_str("0001");
+    }
 
     // Serialize vin count and push the numb of inputs
     let vin_count = transaction.vin.len() as u64;
@@ -470,15 +471,15 @@ fn serialized_segwit_tx(transaction: &Transaction) -> String {
     // Need the witness to be added to the coinbase tx so if there is a witness field that is equal to
     // "0000000000000000000000000000000000000000000000000000000000000000" then push to the serialized tx
     // before the locktime
-    // for vin in &transaction.vin {
-    //     if let Some(witness) = &vin.witness {
-    //         if witness[0] == "0000000000000000000000000000000000000000000000000000000000000000" {
-    //             serialized_tx.push_str("01");
-    //             serialized_tx.push_str("20");
-    //             serialized_tx.push_str(&witness[0]);
-    //         }
-    //     }
-    // }
+    for vin in &transaction.vin {
+        if let Some(witness) = &vin.witness {
+            if witness[0] == "0000000000000000000000000000000000000000000000000000000000000000" {
+                serialized_tx.push_str("01");
+                serialized_tx.push_str("20");
+                serialized_tx.push_str(&witness[0]);
+            }
+        }
+    }
 
     // Finally add the locktime
     let lock = &transaction.locktime.to_le_bytes();
