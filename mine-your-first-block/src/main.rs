@@ -1389,9 +1389,9 @@ fn main() {
     let coinbase_tx_for_processing = TransactionForProcessing {
         transaction: coinbase_tx.clone(),
         txid: coinbase_txid.clone(),
-        wtxid: None,
+        wtxid: Some("0000000000000000000000000000000000000000000000000000000000000000".to_string()),
         fee: 0,
-        is_p2wpkh: false,
+        is_p2wpkh: true,
     };
     block_txs.insert(0, coinbase_tx_for_processing);
 
