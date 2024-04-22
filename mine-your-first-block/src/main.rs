@@ -1429,9 +1429,9 @@ fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: V
     append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
     for tx in block_txs {
         append_to_file("../output.txt", &tx.txid).unwrap();
-        // if let Some(ref wtxid) = tx.wtxid {
-        //     println!("{}", wtxid);
-        // }
+        if let Some(ref wtxid) = tx.wtxid {
+            println!("{}", wtxid);
+        }
     }
 }
 
