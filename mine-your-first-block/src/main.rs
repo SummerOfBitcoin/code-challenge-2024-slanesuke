@@ -192,10 +192,8 @@ fn construct_block_header(nonce: u32, merkle_root: String) -> BlockHeader {
     let decode_prev_block_hash = hex::decode(prev_block_hash).unwrap();
     let reversed_prev_block_hash = decode_prev_block_hash.iter().rev().cloned().collect::<Vec<u8>>();
     let reversed_hex = hex::encode(reversed_prev_block_hash);
+    block_header.prev_block_hash = reversed_hex.to_string();
 
-    //block_header.prev_block_hash = prev_block_hash.to_string();
-    //block_header.prev_block_hash = reversed_hex.to_string();
-    block_header.prev_block_hash = prev_block_hash.to_string();
 
 
     let timestamp = SystemTime::now()
