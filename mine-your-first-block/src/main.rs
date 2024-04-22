@@ -504,14 +504,12 @@ fn serialized_segwit_wtx(transaction: &Transaction) -> String {
         serialized_tx.push_str(&reversed_txid);
 
 
-
-
         // Serialize vout and push
         let vout = &vin.vout.to_le_bytes();
         let vout_hex = hex::encode(vout);
         serialized_tx.push_str(&vout_hex);
 
-        serialized_tx.push_str("00"); // `scriptSig` should always be empty for SegWit inputs.
+        serialized_tx.push_str("00");
 
 
         let sequence = &vin.sequence.to_le_bytes();
@@ -524,26 +522,6 @@ fn serialized_segwit_wtx(transaction: &Transaction) -> String {
     serialized_tx.push_str(&format!("{:02x}", vout_count));
 
 
-    // Serialize vout count and push the numb of outputs
-    // I copied it from the legacy serialize_tx function
-    // for vout in &transaction.vout {
-    //
-    //     // Next push the amount of satoshis
-    //     let value = &vout.value.to_le_bytes();
-    //     serialized_tx.push_str(&hex::encode(value));
-    //
-    //     // Now push the scriptpubkey cpmpact size
-    //
-    //     // Just like above I had to remove the trailing zeros}
-    //     let scriptpubkey_size = vout.scriptpubkey.len() / 2;
-    //     let mut scriptpubkey_size_bytes = (scriptpubkey_size as u64).to_le_bytes().to_vec();
-    //     if let Some(last_non_zero_position) = scriptpubkey_size_bytes.iter().rposition(|&x| x != 0) {
-    //         scriptpubkey_size_bytes.truncate(last_non_zero_position + 1);
-    //     }
-    //     let scriptpubkey_size_hex = hex::encode(&scriptpubkey_size_bytes);
-    //     serialized_tx.push_str(&scriptpubkey_size_hex);
-    //     serialized_tx.push_str(&vout.scriptpubkey);
-    // }
     for vout in &transaction.vout {
         // Serialize the value in sats
         let value_bytes = &vout.value.to_le_bytes();
@@ -557,24 +535,6 @@ fn serialized_segwit_wtx(transaction: &Transaction) -> String {
         serialized_tx.push_str(&vout.scriptpubkey);
     }
 
-
-    // Now time for the witness fields
-    // for vin in &transaction.vin {
-    //     if let Some(witness) = &vin.witness {
-    //         // Serialize the number of stack items for the witness!
-    //         let stack_items = witness.len() as u64;
-    //         serialized_tx.push_str(&format!("{:02x}", stack_items));
-    //
-    //         for witness_field in witness {
-    //             // Get compact size
-    //             // Why does script_sig have trailing zeros but none here in compact size
-    //             let compact_size = witness_field.len() / 2;
-    //             serialized_tx.push_str(&format!("{:02x}", compact_size));
-    //             serialized_tx.push_str(witness_field);
-    //
-    //         }
-    //     }
-    // }
     for vin in &transaction.vin {
         if let Some(witness) = &vin.witness {
             // Serialize the number of stack items in the witness using CompactSize
@@ -1331,115 +1291,116 @@ fn  calculate_transaction_weight(tx: &Transaction)  ->  u64  {
 
 
 fn main() {
-    let filename =  "../mempool/0a768ce65115e0bf1b4fd4b3b1c5d1a66c56a9cc41d9fc1530a7ef3e4fdeaee7.json";
-    let deserialized_tx = deserialize_tx(filename);
-    let serde_wtx = serialized_segwit_wtx(&deserialized_tx);
-    println!("Serialized WTX: {}", serde_wtx);
-
-    let mut get_wtxid = double_sha256(hex::decode(serde_wtx).unwrap());
-    println!("WTXID: {:?}", hex::encode(get_wtxid));
-    get_wtxid.reverse();
-    println!("WTXID reversed: {:?}", hex::encode(get_wtxid));
+    // For testing wtxid
+    // let filename =  "../mempool/0a768ce65115e0bf1b4fd4b3b1c5d1a66c56a9cc41d9fc1530a7ef3e4fdeaee7.json";
+    // let deserialized_tx = deserialize_tx(filename);
+    // let serde_wtx = serialized_segwit_wtx(&deserialized_tx);
+    // println!("Serialized WTX: {}", serde_wtx);
+    //
+    // let mut get_wtxid = double_sha256(hex::decode(serde_wtx).unwrap());
+    // println!("WTXID: {:?}", hex::encode(get_wtxid));
+    // get_wtxid.reverse();
+    // println!("WTXID reversed: {:?}", hex::encode(get_wtxid));
 
 
     // UNCOMMENT THIS TO MINE A BLOCK
-    // // Path to the mempool folder
-    // let mempool_path = "../mempool";
-    //
-    // // Initialize nonce value;
-    // let mut nonce = 0u32;
-    //
-    // // Get the valid txs from the mempool
-    // let valid_txs = process_mempool(mempool_path).unwrap();
-    //
-    // // // Calculate the total fees and get the txids
-    // // let mut valid_txids: Vec<String> = Vec::new();
-    //
-    // // Initializing block weight
-    // let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
-    // let mut total_weight = 0u64;
-    // let max_block_weight = 4000000u64;
-    // //let max_block_weight = 200000u64;
-    // let mut total_fees = 0u64;
-    //
-    // // Sort transactions by fee in descending order before processing
-    // let sorted_valid_txs: Vec<_> = valid_txs.iter()
-    //     .sorted_by(|a, b| b.fee.cmp(&a.fee))
-    //     .collect();
-    //
-    // // Select transactions to include in the block based on sorted order
-    // for tx in sorted_valid_txs {
-    //     let tx_weight = calculate_transaction_weight(&tx.transaction);
-    //     if total_weight + tx_weight > max_block_weight {
-    //         break;  // Stop if adding this transaction would exceed the max block weight
-    //     }
-    //     block_txs.push(tx.clone());
-    //     total_weight += tx_weight;
-    //     total_fees += tx.fee;
-    // }
-    //
-    // // Sorting the transactions from fees in desencding order
-    // block_txs.sort_by(|a, b| b.fee.cmp(&a.fee));
-    //
-    // // Get the wtxids for the witness root
-    // //let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
-    // let mut wtx_ids_for_witness_root: Vec<String> = Vec::new();
-    // for tx in &block_txs {
-    //     if tx.is_p2wpkh {
-    //         if let Some(ref wtxid) = tx.wtxid {
-    //             wtx_ids_for_witness_root.push(wtxid.clone());  // Collect wtxid if valid
-    //         }
-    //     }
-    // }
-    //
-    //
-    // // Generate coinbase tx
-    // let coinbase_tx = create_coinbase_tx(total_fees, wtx_ids_for_witness_root.clone());
-    // let serialized_cb_tx = serialize_tx(&coinbase_tx);
-    // let cd_tx_bytes = hex::decode(serialized_cb_tx.clone()).unwrap();
-    // // coinbase txid
-    // let coinbase_txid = double_sha256(cd_tx_bytes.clone());
-    // let mut coinbase_txid_le = coinbase_txid.to_vec();
-    // coinbase_txid_le.reverse();
-    // let coinbase_txid = hex::encode(coinbase_txid_le);
-    //
-    // // Insert the coinbase transaction at the beginning of block_txs
-    // let coinbase_tx_for_processing = TransactionForProcessing {
-    //     transaction: coinbase_tx.clone(),
-    //     txid: coinbase_txid.clone(),
-    //     wtxid: Some("0000000000000000000000000000000000000000000000000000000000000000".to_string()),
-    //     fee: 0,
-    //     is_p2wpkh: false,
-    // };
-    // block_txs.insert(0, coinbase_tx_for_processing);
-    //
-    // // Use block_txs to generate Merkle root
-    // let txids_for_merkle = block_txs.iter().map(|tx| tx.txid.clone()).collect::<Vec<_>>();
-    // let merkle_root = get_merkle_root(txids_for_merkle.clone());
-    //
-    // // Start Mining!
-    // loop {
-    //     // Get the block header and serialize it
-    //     let block_header = construct_block_header(nonce, merkle_root.clone());
-    //     let serialized_block_header = serialize_block_header(&block_header);
-    //
-    //     // Calculate the hash of the block header
-    //     //let block_hash = calculate_hash(serialized_block_header.clone());
-    //     let  block_hash =  double_sha256(serialized_block_header.clone());
-    //     let mut block_h = block_hash;
-    //     block_h.reverse();
-    //     let block_hash = hex::encode(block_h);
-    //
-    //     // Check if the hash meets the target
-    //     if hash_meets_difficulty_target(&block_hash) {
-    //         //write_block_to_file(&serialized_block_header, &cd_tx_bytes, &block_txs);
-    //         write_block_to_file(&serialized_block_header, &cd_tx_bytes, txids_for_merkle.clone(), &block_txs);
-    //         println!("Success, the block met the target difficulty!");
-    //         break;
-    //     } else {
-    //         nonce += 1;
-    //     }
-    // }
+    // Path to the mempool folder
+    let mempool_path = "../mempool";
+
+    // Initialize nonce value;
+    let mut nonce = 0u32;
+
+    // Get the valid txs from the mempool
+    let valid_txs = process_mempool(mempool_path).unwrap();
+
+    // // Calculate the total fees and get the txids
+    // let mut valid_txids: Vec<String> = Vec::new();
+
+    // Initializing block weight
+    let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
+    let mut total_weight = 0u64;
+    let max_block_weight = 4000000u64;
+    //let max_block_weight = 200000u64;
+    let mut total_fees = 0u64;
+
+    // Sort transactions by fee in descending order before processing
+    let sorted_valid_txs: Vec<_> = valid_txs.iter()
+        .sorted_by(|a, b| b.fee.cmp(&a.fee))
+        .collect();
+
+    // Select transactions to include in the block based on sorted order
+    for tx in sorted_valid_txs {
+        let tx_weight = calculate_transaction_weight(&tx.transaction);
+        if total_weight + tx_weight > max_block_weight {
+            break;  // Stop if adding this transaction would exceed the max block weight
+        }
+        block_txs.push(tx.clone());
+        total_weight += tx_weight;
+        total_fees += tx.fee;
+    }
+
+    // Sorting the transactions from fees in desencding order
+    block_txs.sort_by(|a, b| b.fee.cmp(&a.fee));
+
+    // Get the wtxids for the witness root
+    //let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
+    let mut wtx_ids_for_witness_root: Vec<String> = Vec::new();
+    for tx in &block_txs {
+        if tx.is_p2wpkh {
+            if let Some(ref wtxid) = tx.wtxid {
+                wtx_ids_for_witness_root.push(wtxid.clone());  // Collect wtxid if valid
+            }
+        }
+    }
+
+
+    // Generate coinbase tx
+    let coinbase_tx = create_coinbase_tx(total_fees, wtx_ids_for_witness_root.clone());
+    let serialized_cb_tx = serialize_tx(&coinbase_tx);
+    let cd_tx_bytes = hex::decode(serialized_cb_tx.clone()).unwrap();
+    // coinbase txid
+    let coinbase_txid = double_sha256(cd_tx_bytes.clone());
+    let mut coinbase_txid_le = coinbase_txid.to_vec();
+    coinbase_txid_le.reverse();
+    let coinbase_txid = hex::encode(coinbase_txid_le);
+
+    // Insert the coinbase transaction at the beginning of block_txs
+    let coinbase_tx_for_processing = TransactionForProcessing {
+        transaction: coinbase_tx.clone(),
+        txid: coinbase_txid.clone(),
+        wtxid: Some("0000000000000000000000000000000000000000000000000000000000000000".to_string()),
+        fee: 0,
+        is_p2wpkh: false,
+    };
+    block_txs.insert(0, coinbase_tx_for_processing);
+
+    // Use block_txs to generate Merkle root
+    let txids_for_merkle = block_txs.iter().map(|tx| tx.txid.clone()).collect::<Vec<_>>();
+    let merkle_root = get_merkle_root(txids_for_merkle.clone());
+
+    // Start Mining!
+    loop {
+        // Get the block header and serialize it
+        let block_header = construct_block_header(nonce, merkle_root.clone());
+        let serialized_block_header = serialize_block_header(&block_header);
+
+        // Calculate the hash of the block header
+        //let block_hash = calculate_hash(serialized_block_header.clone());
+        let  block_hash =  double_sha256(serialized_block_header.clone());
+        let mut block_h = block_hash;
+        block_h.reverse();
+        let block_hash = hex::encode(block_h);
+
+        // Check if the hash meets the target
+        if hash_meets_difficulty_target(&block_hash) {
+            //write_block_to_file(&serialized_block_header, &cd_tx_bytes, &block_txs);
+            write_block_to_file(&serialized_block_header, &cd_tx_bytes, txids_for_merkle.clone(), &block_txs);
+            println!("Success, the block met the target difficulty!");
+            break;
+        } else {
+            nonce += 1;
+        }
+    }
 }
 
 fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: Vec<String>, block_txs: &[TransactionForProcessing]) {
