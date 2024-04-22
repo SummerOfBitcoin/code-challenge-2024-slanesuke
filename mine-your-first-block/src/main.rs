@@ -959,7 +959,7 @@ fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Stri
     let wtx_bytes = hex::decode(serialized_validwtx.clone())?;
     let wtxid_be = double_sha256(wtx_bytes);
     let mut wtxid_le = wtxid_be;
-    wtxid_le.reverse();
+    //wtxid_le.reverse();
     let wtxid = hex::encode(wtxid_le);
 
     // FOR TXID
@@ -1365,16 +1365,12 @@ fn main() {
         }
     }
 
-    // Right now my  coinbase tx is wrong. When I put it through the txid splitter online it
-    // Gives me a different output becacuse it rermoved the marker and flag as well as the witness data
-    // So i need to test this out and see if it works beccause the wrong coinbase txid  is most likely
-    // my problem
     // Generate coinbase tx
     let coinbase_tx = create_coinbase_tx(total_fees, wtx_ids_for_witness_root.clone());
     let serialized_cb_tx = serialized_segwit_tx(&coinbase_tx);
+
+    println!("{:#?}", coinbase_tx);
     let cd_tx_bytes = hex::decode(serialized_cb_tx.clone()).unwrap();
-
-
 
     // coinbase txid
     let coinebase_tx_for_txid = coinbase_tx.clone();
@@ -1429,9 +1425,9 @@ fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: V
     append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
     for tx in block_txs {
         append_to_file("../output.txt", &tx.txid).unwrap();
-        if let Some(ref wtxid) = tx.wtxid {
-            println!("{}", wtxid);
-        }
+        // if let Some(ref wtxid) = tx.wtxid {
+        //     println!("{}", wtxid);
+        // }
     }
 }
 
