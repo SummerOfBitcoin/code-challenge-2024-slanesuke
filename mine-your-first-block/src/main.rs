@@ -1382,7 +1382,7 @@ fn main() {
     let cb_txid_bytes = hex::decode(serialized_cb_tx_for_txid).unwrap();
     let coinbase_txid = double_sha256(cb_txid_bytes.clone());
     let mut coinbase_txid_le = coinbase_txid.to_vec();
-    //coinbase_txid_le.reverse();
+    coinbase_txid_le.reverse();
     let coinbase_txid = hex::encode(coinbase_txid_le);
 
     // Insert the coinbase transaction at the beginning of block_txs
