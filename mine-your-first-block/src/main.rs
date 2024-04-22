@@ -307,9 +307,9 @@ fn serialize_tx(transaction: &Transaction) -> String {
 
     // For the coinbase transaction in between the version and vin count I need to add the marker and flag
     // If the is_coinbase == true push 00 and 01
-    if transaction.vin[0].is_coinbase {
-        serialized_tx.push_str("0001");
-    }
+    // if transaction.vin[0].is_coinbase {
+    //     serialized_tx.push_str("0001");
+    // }
 
     // Serialize vin count
     let vin_count = transaction.vin.len() as u64;
@@ -381,15 +381,15 @@ fn serialize_tx(transaction: &Transaction) -> String {
     // Need the witness to be added to the coinbase tx so if there is a witness field that is equal to
     // "0000000000000000000000000000000000000000000000000000000000000000" then push to the serialized tx
     // before the locktime
-    for vin in &transaction.vin {
-        if let Some(witness) = &vin.witness {
-            if witness[0] == "0000000000000000000000000000000000000000000000000000000000000000" {
-                serialized_tx.push_str("01");
-                serialized_tx.push_str("20");
-                serialized_tx.push_str(&witness[0]);
-            }
-        }
-    }
+    // for vin in &transaction.vin {
+    //     if let Some(witness) = &vin.witness {
+    //         if witness[0] == "0000000000000000000000000000000000000000000000000000000000000000" {
+    //             serialized_tx.push_str("01");
+    //             serialized_tx.push_str("20");
+    //             serialized_tx.push_str(&witness[0]);
+    //         }
+    //     }
+    // }
 
 
     let lock = &transaction.locktime.to_le_bytes();
@@ -1364,16 +1364,18 @@ fn main() {
     // Generate coinbase tx
     let coinbase_tx = create_coinbase_tx(total_fees, wtx_ids_for_witness_root.clone());
     let serialized_cb_tx = serialized_segwit_tx(&coinbase_tx);
-    println!("Coinbase tx: {}", serialized_cb_tx);
     let cd_tx_bytes = hex::decode(serialized_cb_tx.clone()).unwrap();
+
+
+
     // coinbase txid
-    println!("Coinbase tx  befoore hash: {}", hex::encode(cd_tx_bytes.clone()));
-    let coinbase_txid = double_sha256(cd_tx_bytes.clone());
+    let coinebase_tx_for_txid = coinbase_tx.clone();
+    let serialized_cb_tx_for_txid = serialize_tx(&coinebase_tx_for_txid);
+    let cb_txid_bytes = hex::decode(serialized_cb_tx_for_txid).unwrap();
+    let coinbase_txid = double_sha256(cb_txid_bytes.clone());
     let mut coinbase_txid_le = coinbase_txid.to_vec();
     coinbase_txid_le.reverse();
-    //let coinbase_txid = hex::encode(coinbase_txid_le);
-    //println!("Coinbase txid: {}", coinbase_txid);
-    let coinbase_txid = "1909f265c0850bc87c63e0d8cec1130615178204193636903a5747bd9b51e113".to_string();
+    let coinbase_txid = hex::encode(coinbase_txid_le);
 
     // Insert the coinbase transaction at the beginning of block_txs
     let coinbase_tx_for_processing = TransactionForProcessing {
