@@ -106,7 +106,7 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
     coinbase_tx.version = 1;
 
     // witness data
-    let witness_reserved_value = "0000000000000000000000000000000000000000000000000000000000000000";
+    let witness_reserved_value = "0000000000000000000000000000000000000000000000000000000000000000".to_string();
 
     let txid= "0000000000000000000000000000000000000000000000000000000000000000";
     // input count is 1 byte 01
@@ -148,7 +148,7 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
     let mut witness_root_hash_bytes = hex::decode(witness_root_hash).unwrap();
     //witness_root_hash_bytes.reverse(); // Reverse to match endianness maybe dont need this??
 
-    let reserved_value = vec![0; 32]; // 32 bytes of zeros
+    let reserved_value = hex::decode(witness_reserved_value).unwrap();
     let mut commitment_payload = Vec::new();
     commitment_payload.extend_from_slice(&witness_root_hash_bytes);
     commitment_payload.extend_from_slice(&reserved_value);
