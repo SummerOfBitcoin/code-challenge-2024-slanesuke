@@ -500,9 +500,9 @@ fn serialized_segwit_wtx(transaction: &Transaction) -> String {
         serialized_tx.push_str(&vin.txid);
         // I believe the txid needs to be in reversed byte order
         let txid_bytes = hex::decode(&vin.txid).unwrap();
-        // let reversed_txid_bytes: Vec<u8> = txid_bytes.into_iter().rev().collect();
-        // let reversed_txid = hex::encode(reversed_txid_bytes);
-        // serialized_tx.push_str(&reversed_txid);
+        let reversed_txid_bytes: Vec<u8> = txid_bytes.into_iter().rev().collect();
+        let reversed_txid = hex::encode(reversed_txid_bytes);
+        serialized_tx.push_str(&reversed_txid);
 
 
 
