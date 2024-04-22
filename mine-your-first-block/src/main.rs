@@ -146,7 +146,7 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
 
     let witness_root_hash = get_merkle_root(witness_root_vec);
     let mut witness_root_hash_bytes = hex::decode(witness_root_hash).unwrap();
-    witness_root_hash_bytes.reverse(); // Reverse to match endianness maybe dont need this??
+    //witness_root_hash_bytes.reverse(); // Reverse to match endianness maybe dont need this??
 
     let reserved_value = hex::decode(witness_reserved_value).unwrap();
     let mut commitment_payload = Vec::new();
@@ -467,6 +467,19 @@ fn serialized_segwit_tx(transaction: &Transaction) -> String {
         let scriptpubkey_size_hex = hex::encode(&scriptpubkey_size_bytes);
         serialized_tx.push_str(&scriptpubkey_size_hex);
         serialized_tx.push_str(&vout.scriptpubkey);
+    }
+
+    // Need the witness to be added to the coinbase tx so if there is a witness field that is equal to
+    // "0000000000000000000000000000000000000000000000000000000000000000" then push to the serialized tx
+    // before the locktime
+    for vin in &transaction.vin {
+        if let Some(witness) = &vin.witness {
+            if witness[0] == "0000000000000000000000000000000000000000000000000000000000000000" {
+                serialized_tx.push_str("01");
+                serialized_tx.push_str("20");
+                serialized_tx.push_str(&witness[0]);
+            }
+        }
     }
 
     // Finally add the locktime
@@ -1289,19 +1302,6 @@ fn  calculate_transaction_weight(tx: &Transaction)  ->  u64  {
 
 
 fn main() {
-    // For testing wtxid
-    // let filename =  "../mempool/0a768ce65115e0bf1b4fd4b3b1c5d1a66c56a9cc41d9fc1530a7ef3e4fdeaee7.json";
-    // let deserialized_tx = deserialize_tx(filename);
-    // let serde_wtx = serialized_segwit_wtx(&deserialized_tx);
-    // println!("Serialized WTX: {}", serde_wtx);
-    //
-    // let mut get_wtxid = double_sha256(hex::decode(serde_wtx).unwrap());
-    // println!("WTXID: {:?}", hex::encode(get_wtxid));
-    // get_wtxid.reverse();
-    // println!("WTXID reversed: {:?}", hex::encode(get_wtxid));
-
-
-    // UNCOMMENT THIS TO MINE A BLOCK
     // Path to the mempool folder
     let mempool_path = "../mempool";
 
@@ -1317,7 +1317,7 @@ fn main() {
     // Initializing block weight
     let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
     let mut total_weight = 0u64;
-    let max_block_weight = 2000000u64;
+    let max_block_weight = 4000000u64;
     //let max_block_weight = 200000u64;
     let mut total_fees = 0u64;
 
@@ -1407,12 +1407,6 @@ fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: V
     append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
     for tx in block_txs {
         append_to_file("../output.txt", &tx.txid).unwrap();
-    }
-
-    for wtxid in  block_txs {
-        if let Some(wtxid) = &wtxid.wtxid {
-            println!("{}", wtxid);
-        }
     }
 }
 
