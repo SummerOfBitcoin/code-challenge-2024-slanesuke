@@ -1373,7 +1373,7 @@ fn main() {
     coinbase_txid_le.reverse();
     //let coinbase_txid = hex::encode(coinbase_txid_le);
     //println!("Coinbase txid: {}", coinbase_txid);
-    let coinbase_txid = "13e1519bbd47573a90363619048217150613c1ced8e0637cc80b85c065f20919".to_string();
+    let coinbase_txid = "1909f265c0850bc87c63e0d8cec1130615178204193636903a5747bd9b51e113".to_string();
 
     // Insert the coinbase transaction at the beginning of block_txs
     let coinbase_tx_for_processing = TransactionForProcessing {
