@@ -146,7 +146,7 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
 
     let witness_root_hash = get_merkle_root(witness_root_vec);
     let mut witness_root_hash_bytes = hex::decode(witness_root_hash).unwrap();
-    //witness_root_hash_bytes.reverse(); // Reverse to match endianness maybe dont need this??
+    witness_root_hash_bytes.reverse(); // Reverse to match endianness maybe dont need this??
 
     let reserved_value = vec![0; 32]; // 32 bytes of zeros
     let mut commitment_payload = Vec::new();
@@ -1339,8 +1339,8 @@ fn main() {
     // Initializing block weight
     let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
     let mut total_weight = 0u64;
-    //let max_block_weight = 4000000u64;
-    let max_block_weight = 200000u64;
+    let max_block_weight = 4000000u64;
+    //let max_block_weight = 200000u64;
     let mut total_fees = 0u64;
 
     // Sort transactions by fee in descending order before processing
@@ -1427,16 +1427,8 @@ fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: V
     fs::write("../output.txt", "").unwrap();  // Clear the output file
     append_to_file("../output.txt", &hex::encode(serialized_header)).unwrap();
     append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
-    //println!("TXIDS:::::");
     for tx in block_txs {
-        // println!("{}", &tx.txid);
         append_to_file("../output.txt", &tx.txid).unwrap();
-    }
-
-    for tx in block_txs {
-        if let Some(ref wtxid) = tx.wtxid {
-            println!("wtxid: {}, txid: {}", wtxid, tx.txid);
-        }
     }
 }
 
