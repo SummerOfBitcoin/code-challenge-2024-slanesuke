@@ -555,8 +555,6 @@ fn serialized_segwit_wtx(transaction: &Transaction) -> String {
         }
     }
 
-
-
     // Finally add the locktime
     let lock = &transaction.locktime.to_le_bytes();
     let lock_hex = hex::encode(lock);
@@ -1319,7 +1317,7 @@ fn main() {
     // Initializing block weight
     let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
     let mut total_weight = 0u64;
-    let max_block_weight = 4000000u64;
+    let max_block_weight = 2000000u64;
     //let max_block_weight = 200000u64;
     let mut total_fees = 0u64;
 
