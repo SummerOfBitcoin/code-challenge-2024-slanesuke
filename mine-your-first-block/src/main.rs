@@ -123,7 +123,7 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
             value: 0,
         },
         scriptsig: block_scriptsig,
-        scriptsig_asm: "".to_string(),
+        scriptsig_asm: "OP_PUSHBYTES_3 837122".to_string(),
         witness: Some(vec![witness_reserved_value.to_string()]),
         is_coinbase: true,
         sequence: 0xffffffff,
@@ -132,8 +132,8 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
     // Output count is 1 byte 01
     coinbase_tx.vout.push(Vout {
         scriptpubkey,
-        scriptpubkey_asm: "".to_string(),
-        scriptpubkey_type: "".to_string(),
+        scriptpubkey_asm: "OP_DUP OP_HASH160 OP_PUSHBYTES_20 06f1b66fd59a34755c37a8f701f43e937cdbeb13 OP_EQUALVERIFY OP_CHECKSIG".to_string(),
+        scriptpubkey_type: "p2pkh".to_string(),
         scriptpubkey_address: None,
         value: block_substidy_plus_fees,
     });
@@ -146,28 +146,17 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
     witness_root_vec.insert(0, witness_reserved_value.clone());
 
     let witness_root_hash = get_merkle_root(witness_root_vec);
-    // let mut witness_bytes = hex::decode(witness_root_hash).unwrap();
-    // witness_bytes.reverse();
-    // let witness_root_hash = hex::encode(witness_bytes);
     let concantinated_items = format!("{}{}", witness_root_hash, witness_reserved_value);
-    //let mut witness_root_hash_bytes = hex::decode(witness_root_hash).unwrap();
-    //witness_root_hash_bytes.reverse(); // Reverse to match endianness maybe dont need this??
-
-    //let reserved_value = hex::decode(witness_reserved_value).unwrap();
-    //let mut commitment_payload = Vec::new();
-    //commitment_payload.extend_from_slice(&witness_root_hash_bytes);
-    //commitment_payload.extend_from_slice(&reserved_value);
 
     //let wtxid_commitment = double_sha256(commitment_payload);
-    let wtxid_commitment_test =  double_sha256(hex::decode(concantinated_items).unwrap());
-// Format the OP_RETURN output correctly
-    //let scriptpubkey_for_wtxid = format!("6a24aa21a9ed{}", hex::encode(wtxid_commitment));
-    let scriptpubkey_for_wtxid_test = format!("6a24aa21a9ed{}", hex::encode(wtxid_commitment_test));
-    //let scriptpubkey_for_wtxid = "6a24aa21a9ed1e25fb0a02cdcbe624b0ef55a26e0091d06a04575d163fc6e00d482ef23f2c31".to_string();
+    let wtxid_items_bytes = hex::decode(concantinated_items).unwrap();
+    let wtxid_commitment_test =  double_sha256(wtxid_items_bytes);
+    let wtxid_commitment = hex::encode(wtxid_commitment_test);
+    let scriptpubkey_for_wtxid_test = format!("6a24aa21a9ed{}", wtxid_commitment);
     coinbase_tx.vout.push(Vout {
         scriptpubkey: scriptpubkey_for_wtxid_test,
-        scriptpubkey_asm: "".to_string(),
-        scriptpubkey_type: "".to_string(),
+        scriptpubkey_asm: "OP_RETURN OP_PUSHBYTES_36 aa21a9ed".to_string() + &wtxid_commitment,
+        scriptpubkey_type: "op_return".to_string(),
         scriptpubkey_address: None,
         value: 0,
     });
