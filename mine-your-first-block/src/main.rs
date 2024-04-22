@@ -1354,7 +1354,8 @@ fn main() {
 
     // Generate coinbase tx
     let coinbase_tx = create_coinbase_tx(total_fees, wtx_ids_for_witness_root.clone());
-    let serialized_cb_tx = serialize_tx(&coinbase_tx);
+    // let serialized_cb_tx = serialize_tx(&coinbase_tx);
+    let serialized_cb_tx = serialized_segwit_tx(&coinbase_tx);
     let cd_tx_bytes = hex::decode(serialized_cb_tx.clone()).unwrap();
     // coinbase txid
     let coinbase_txid = double_sha256(cd_tx_bytes.clone());
