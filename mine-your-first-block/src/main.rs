@@ -146,9 +146,9 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
     witness_root_vec.insert(0, witness_reserved_value.clone());
 
     let witness_root_hash = get_merkle_root(witness_root_vec);
-    let mut witness_bytes = hex::decode(witness_root_hash).unwrap();
-    witness_bytes.reverse();
-    let witness_root_hash = hex::encode(witness_bytes);
+    // let mut witness_bytes = hex::decode(witness_root_hash).unwrap();
+    // witness_bytes.reverse();
+    // let witness_root_hash = hex::encode(witness_bytes);
     let concantinated_items = format!("{}{}", witness_root_hash, witness_reserved_value);
     //let mut witness_root_hash_bytes = hex::decode(witness_root_hash).unwrap();
     //witness_root_hash_bytes.reverse(); // Reverse to match endianness maybe dont need this??
@@ -1431,9 +1431,9 @@ fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: V
     append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
     for tx in block_txs {
         append_to_file("../output.txt", &tx.txid).unwrap();
-        if let Some(ref wtxid) = tx.wtxid {
-            println!("{}", wtxid);
-        }
+        // if let Some(ref wtxid) = tx.wtxid {
+        //     println!("{}", wtxid);
+        // }
     }
 }
 
