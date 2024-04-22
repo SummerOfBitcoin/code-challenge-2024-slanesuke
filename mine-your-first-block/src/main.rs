@@ -95,7 +95,7 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
     //  The block subsidy is 6.25 btc plus the fees from the transactions
     let block_substidy_plus_fees: u64 = 625000000 + total_tx_fee;
 
-    let scriptpubkey = "41049464205950188c29d377eebca6535e0f3699ce4069ecd77ffebfbd0bcf95e3c134cb7d2742d800a12df41413a09ef87a80516353a2f0a280547bb5512dc03da8ac".to_string();
+    //let scriptpubkey = "41049464205950188c29d377eebca6535e0f3699ce4069ecd77ffebfbd0bcf95e3c134cb7d2742d800a12df41413a09ef87a80516353a2f0a280547bb5512dc03da8ac".to_string();
     let scriptpubkey = "76a91406f1b66fd59a34755c37a8f701f43e937cdbeb1388ac".to_string();
 
     //let extra_nonce_hex = hex::encode("SlanesukeSOBIntern2024".as_bytes());
@@ -130,7 +130,6 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
 
     // Output count is 1 byte 01
     coinbase_tx.vout.push(Vout {
-        // scriptpubkey: address_hex,
         scriptpubkey,
         scriptpubkey_asm: "".to_string(),
         scriptpubkey_type: "".to_string(),
@@ -147,7 +146,7 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
 
     let witness_root_hash = get_merkle_root(witness_root_vec);
     let mut witness_root_hash_bytes = hex::decode(witness_root_hash).unwrap();
-    //witness_root_hash_bytes.reverse(); // Reverse to match endianness maybe dont need this??
+    witness_root_hash_bytes.reverse(); // Reverse to match endianness maybe dont need this??
 
     let reserved_value = hex::decode(witness_reserved_value).unwrap();
     let mut commitment_payload = Vec::new();
