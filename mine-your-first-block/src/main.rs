@@ -373,15 +373,15 @@ fn serialize_tx(transaction: &Transaction) -> String {
     // Need the witness to be added to the coinbase tx so if there is a witness field that is equal to
     // "0000000000000000000000000000000000000000000000000000000000000000" then push to the serialized tx
     // before the locktime
-    // for vin in &transaction.vin {
-    //     if let Some(witness) = &vin.witness {
-    //         if witness[0] == "0000000000000000000000000000000000000000000000000000000000000000" {
-    //             serialized_tx.push_str("01");
-    //             serialized_tx.push_str("20");
-    //             serialized_tx.push_str(&witness[0]);
-    //         }
-    //     }
-    // }
+    for vin in &transaction.vin {
+        if let Some(witness) = &vin.witness {
+            if witness[0] == "0000000000000000000000000000000000000000000000000000000000000000" {
+                serialized_tx.push_str("01");
+                serialized_tx.push_str("20");
+                serialized_tx.push_str(&witness[0]);
+            }
+        }
+    }
 
 
     let lock = &transaction.locktime.to_le_bytes();
