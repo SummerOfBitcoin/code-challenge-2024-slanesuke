@@ -1357,7 +1357,10 @@ fn main() {
         }
     }
 
-
+    // Right now my  coinbase tx is wrong. When I put it through the txid splitter online it
+    // Gives me a different output becacuse it rermoved the marker and flag as well as the witness data
+    // So i need to test this out and see if it works beccause the wrong coinbase txid  is most likely
+    // my problem
     // Generate coinbase tx
     let coinbase_tx = create_coinbase_tx(total_fees, wtx_ids_for_witness_root.clone());
     let serialized_cb_tx = serialized_segwit_tx(&coinbase_tx);
@@ -1370,6 +1373,7 @@ fn main() {
     coinbase_txid_le.reverse();
     let coinbase_txid = hex::encode(coinbase_txid_le);
     println!("Coinbase txid: {}", coinbase_txid);
+    let coinbase_txid = "13e1519bbd47573a90363619048217150613c1ced8e0637cc80b85c065f20919".to_string();
 
     // Insert the coinbase transaction at the beginning of block_txs
     let coinbase_tx_for_processing = TransactionForProcessing {
