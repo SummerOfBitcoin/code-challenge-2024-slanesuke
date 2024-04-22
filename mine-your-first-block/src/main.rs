@@ -299,9 +299,9 @@ fn serialize_tx(transaction: &Transaction) -> String {
 
     // For the coinbase transaction in between the version and vin count I need to add the marker and flag
     // If the is_coinbase == true push 00 and 01
-    // if transaction.vin[0].is_coinbase {
-    //     serialized_tx.push_str("0001");
-    // }
+    if transaction.vin[0].is_coinbase {
+        serialized_tx.push_str("0001");
+    }
 
     // Serialize vin count
     let vin_count = transaction.vin.len() as u64;
