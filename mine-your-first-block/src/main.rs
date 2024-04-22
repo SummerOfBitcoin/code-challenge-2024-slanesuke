@@ -1383,7 +1383,6 @@ fn main() {
         let serialized_block_header = serialize_block_header(&block_header);
 
         // Calculate the hash of the block header
-        //let block_hash = calculate_hash(serialized_block_header.clone());
         let  block_hash =  double_sha256(serialized_block_header.clone());
         let mut block_h = block_hash;
         block_h.reverse();
@@ -1407,6 +1406,12 @@ fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: V
     append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
     for tx in block_txs {
         append_to_file("../output.txt", &tx.txid).unwrap();
+    }
+
+    for wtxid in  block_txs {
+        if let Some(wtxid) = &wtxid.wtxid {
+            println!("{}", wtxid);
+        }
     }
 }
 
