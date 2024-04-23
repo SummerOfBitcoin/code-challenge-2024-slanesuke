@@ -137,11 +137,6 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
     // the scriptpubkey of the second output
     // Made some edits to work directly with bytes so i didnt have to decode and encode
    //witness_root_vec.insert(0, witness_reserved_value.clone());
-    println!("From CB FN");
-    for tx in &witness_root_vec {
-        println!("{}", tx);
-    }
-    println!("END CB FN");
 
     let witness_root_hash = get_merkle_root(witness_root_vec);
     let concant_items = format!("{}{}", witness_root_hash, witness_reserved_value);
@@ -1273,6 +1268,7 @@ fn main() {
     let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
     //let mut wtx_ids_for_witness_root: Vec<String> = vec![];
     for tx in &block_txs {
+        // println!("TransactionID: {}, IS_P2WPKH: {}", tx.txid, tx.is_p2wpkh);
         if tx.is_p2wpkh {
             if let Some(ref wtxid) = tx.wtxid {
                 wtx_ids_for_witness_root.push(wtxid.clone());  // Collect wtxid if valid
@@ -1337,9 +1333,9 @@ fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: V
     append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
     for tx in block_txs {
         append_to_file("../output.txt", &tx.txid).unwrap();
-        if tx.is_p2wpkh {
-            println!("{}", tx.wtxid.as_ref().unwrap());
-        }
+        // if tx.is_p2wpkh {
+        //     println!("{}", tx.wtxid.as_ref().unwrap());
+        // }
     }
 }
 
