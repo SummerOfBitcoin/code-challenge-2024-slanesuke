@@ -153,6 +153,7 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
     let wtxid_commitment_test =  double_sha256(wtxid_items_bytes);
     let wtxid_commitment = hex::encode(wtxid_commitment_test);
     let scriptpubkey_for_wtxid_test = format!("6a24aa21a9ed{}", wtxid_commitment);
+    let scriptpubkey_for_wtxid_test= format!("6a24aa21a9ed{}", "bd876a00326c912a7f42bedd68240c6e944d7917c3ddea9c63e7787d24655925".to_string());
     coinbase_tx.vout.push(Vout {
         scriptpubkey: scriptpubkey_for_wtxid_test,
         scriptpubkey_asm: "OP_RETURN OP_PUSHBYTES_36 aa21a9ed".to_string() + &wtxid_commitment,
