@@ -1317,7 +1317,7 @@ fn main() {
     let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
     let mut total_weight = 0u64;
     //let max_block_weight = 1000000u64;
-    let max_block_weight = 300001u64;
+    let max_block_weight = 200000u64;
     let mut total_fees = 0u64;
 
     // Sort transactions by fee in descending order before processing
@@ -1365,9 +1365,6 @@ fn main() {
     // Generate coinbase tx
     let coinbase_tx = create_coinbase_tx(total_fees, wtx_ids_for_witness_root.clone());
     let serialized_cb_tx = serialized_segwit_tx(&coinbase_tx);
-
-
-    //println!("{:#?}", coinbase_tx);
     let cd_tx_bytes = hex::decode(serialized_cb_tx.clone()).unwrap();
 
     // coinbase txid
