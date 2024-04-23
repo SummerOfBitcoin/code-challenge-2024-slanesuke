@@ -137,11 +137,16 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
     // the scriptpubkey of the second output
     // Made some edits to work directly with bytes so i didnt have to decode and encode
    //witness_root_vec.insert(0, witness_reserved_value.clone());
+    println!("From CB FN");
+    for tx in &witness_root_vec {
+        println!("{}", tx);
+    }
+    println!("END CB FN");
 
     let witness_root_hash = get_merkle_root(witness_root_vec);
-    let concantinated_items = format!("{}{}", witness_root_hash, witness_reserved_value);
+    let concant_items = format!("{}{}", witness_root_hash, witness_reserved_value);
 
-    let wtxid_items_bytes = hex::decode(concantinated_items).unwrap();
+    let wtxid_items_bytes = hex::decode(concant_items).unwrap();
     let wtxid_commitment_test =  double_sha256(wtxid_items_bytes);
     let wtxid_commitment = hex::encode(wtxid_commitment_test);
     let scriptpubkey_for_wtxid_test = format!("6a24aa21a9ed{}", wtxid_commitment);
@@ -1266,8 +1271,8 @@ fn main() {
     block_txs.sort_by(|a, b| b.fee.cmp(&a.fee));
 
     // Get the wtxids for the witness root
-    let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
-    //let mut wtx_ids_for_witness_root: Vec<String> = vec![];
+    //let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
+    let mut wtx_ids_for_witness_root: Vec<String> = vec![];
     for tx in &block_txs {
         if tx.is_p2wpkh {
             if let Some(ref wtxid) = tx.wtxid {
