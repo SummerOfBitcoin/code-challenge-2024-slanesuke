@@ -173,8 +173,6 @@ fn construct_block_header(nonce: u32, merkle_root: String) -> BlockHeader {
     let reversed_hex = hex::encode(reversed_prev_block_hash);
     block_header.prev_block_hash = reversed_hex.to_string();
 
-
-
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -190,8 +188,6 @@ fn construct_block_header(nonce: u32, merkle_root: String) -> BlockHeader {
 }
 
 /// This function serializes the block header because it's a bit different from a reg tx
-// Previously i serialized each input at a time but this fn does each field at a once  so it should
-// speed up the process???c
 fn serialize_block_header(block_header: &BlockHeader) -> Vec<u8> {
     let mut buffer = vec![0u8; 80];  // 80 bytes for Bitcoin block header
 
@@ -206,13 +202,11 @@ fn serialize_block_header(block_header: &BlockHeader) -> Vec<u8> {
         writer.write_u32::<LittleEndian>(block_header.bits).unwrap();
         writer.write_u32::<LittleEndian>(block_header.nonce).unwrap();
     }
-
     buffer
 }
 
-
-
-
+/// This function calcluates the merkle root. It putes txids in natural byte order then
+/// Hashes the tree
 fn get_merkle_root(txids: Vec<String>) -> String {
     // WTF I converted it to big endian but it gave me the wrong merkle root so
     // I will just keep it in little endian and reverse the bytes when hashing (ithink)
@@ -225,12 +219,6 @@ fn get_merkle_root(txids: Vec<String>) -> String {
             arr
         })
         .collect::<Vec<[u8; 32]>>();
-
-
-    // If the number of txs is odd, duplicate the last tx and hash it with itself
-    // I need to Loop through the merkle tree and hash each pair of txids
-    // First I must concatenate the two txids (in order) and they must be 512 bits because each tx is 256 bits
-    // double sha256 is used to hash
 
     // While the merkle tree has more than one txid
     while be_txid.len() > 1 {
@@ -260,11 +248,6 @@ fn deserialize_tx(filename: &str) -> Transaction {
     //  Open the file of a tx
     let file = File::open(filename).unwrap();
 
-    // let mut json_string = String::new();
-    // file.read_to_string(& mut json_string).unwrap();
-    //
-    // let tx: Transaction = serde_json::from_str(&json_string).unwrap();
-
     let reader = BufReader::new(file);
     let tx: Transaction = serde_json::from_reader(reader).unwrap();
 
@@ -281,11 +264,6 @@ fn serialize_tx(transaction: &Transaction) -> String {
     let version = transaction.version.to_le_bytes();
     serialized_tx.push_str(&hex::encode(version));
 
-    // For the coinbase transaction in between the version and vin count I need to add the marker and flag
-    // If the is_coinbase == true push 00 and 01
-    // if transaction.vin[0].is_coinbase {
-    //     serialized_tx.push_str("0001");
-    // }
 
     // Serialize vin count
     let vin_count = transaction.vin.len() as u64;
@@ -293,7 +271,6 @@ fn serialize_tx(transaction: &Transaction) -> String {
 
     // Sereialize txid
     for vin in &transaction.vin {
-        //serialized_tx.push_str(&vin.txid);
 
         // I believe the txid needs to be in reversed byte order
         let txid_bytes = hex::decode(&vin.txid).unwrap();
@@ -353,20 +330,6 @@ fn serialize_tx(transaction: &Transaction) -> String {
         serialized_tx.push_str(&scriptpubkey_size_hex);
         serialized_tx.push_str(&vout.scriptpubkey);
     }
-
-    // Need the witness to be added to the coinbase tx so if there is a witness field that is equal to
-    // "0000000000000000000000000000000000000000000000000000000000000000" then push to the serialized tx
-    // before the locktime
-    // for vin in &transaction.vin {
-    //     if let Some(witness) = &vin.witness {
-    //         if witness[0] == "0000000000000000000000000000000000000000000000000000000000000000" {
-    //             serialized_tx.push_str("01");
-    //             serialized_tx.push_str("20");
-    //             serialized_tx.push_str(&witness[0]);
-    //         }
-    //     }
-    // }
-
 
     let lock = &transaction.locktime.to_le_bytes();
     let lock_hex = hex::encode(lock);
@@ -727,10 +690,7 @@ fn get_segwit_tx_message(
     let sequence = vin.sequence.to_le_bytes();
     let sequence= hex::encode(sequence);
 
-    // Serialize and hash all the output fields
-    // hash256(amount+scriptpubkeysize+scriptpubkey)
-    // I have a feeling the amount or some field here is wrong
-    //let mut output_hash = String::new();
+
     let mut output_bytes = Vec::new();
     for vout in tx.vout.iter() {
         let amount_le = vout.value.to_le_bytes();
@@ -799,11 +759,6 @@ fn compact_size_as_bytes(size: usize) -> Vec<u8> {
 
 
 /// This function will validate P2WPKH transactions
-// should i start by checking the scriptpubkey type?
-// // if vin.prevout.scriptpubkey_type == "v0_p2wpkh" {
-//         //
-//         // }
-// Do i need to worry about bech32 addresses?
 fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, String, String), Box<dyn Error>> {
     // Create a stack to hold the data
     let mut stack: Vec<Vec<u8>> = Vec::new();
@@ -832,8 +787,6 @@ fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Stri
         let parts: Vec<&str> = script_pubkey.split_whitespace().collect();
         let pubkey_hash = parts.last().unwrap();
 
-
-
         // Message hash
        let message_hash = get_segwit_tx_message(
             &mut transaction.clone(),
@@ -842,9 +795,6 @@ fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Stri
             sighash_type.clone()
        )?;
         let message_in_bytes = hex::decode(&message_hash)?;
-
-
-
 
         // Now it execute like a p2pkh locking script where the pubkeyhah is pushed after ophash160
         let script_pubkey_asm = format!("OP_DUP OP_HASH160 OP_PUSHBYTES_20 {} OP_EQUALVERIFY OP_CHECKSIG", pubkey_hash);
@@ -920,8 +870,6 @@ fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Stri
                             ).into());
                         }
                     }
-
-
                 }
                 _ => {
                     // If it's not an operator, it's an ordinary data (like sig or pubkey) and push it onto the stack
@@ -934,7 +882,6 @@ fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Stri
         if stack.len() != 1 || stack.is_empty() {
             return Err(format!("Final stack validation failed for input {}", i).into());
         }
-
     }
 
     // May need to change this a bit...
@@ -1177,8 +1124,6 @@ fn append_to_file(filename: &str, contents: &str) -> io::Result<()> {
 // Need to implement logic so that if it passes all these checks it will be added to a vec
 fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProcessing>> {
     let mut valid_txs: Vec<TransactionForProcessing> = Vec::new();
-
-
     for tx in fs::read_dir(mempool_path)? {
         let tx = tx?;
         let path = tx.path();
@@ -1284,8 +1229,6 @@ fn  calculate_transaction_weight(tx: &Transaction)  ->  u64  {
 
 
 fn main() {
-
-
     // Uncomment for the project to mine
     // Path to the mempool folder
     let mempool_path = "../mempool";
@@ -1295,9 +1238,6 @@ fn main() {
 
     // Get the valid txs from the mempool
     let valid_txs = process_mempool(mempool_path).unwrap();
-
-    // // Calculate the total fees and get the txids
-    // let mut valid_txids: Vec<String> = Vec::new();
 
     // Initializing block weight
     let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
@@ -1324,11 +1264,6 @@ fn main() {
 
     // Sorting the transactions from fees in desencding order
     block_txs.sort_by(|a, b| b.fee.cmp(&a.fee));
-
-
-
-
-
 
     // Get the wtxids for the witness root
     let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
