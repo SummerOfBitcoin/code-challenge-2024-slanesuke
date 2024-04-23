@@ -1271,8 +1271,8 @@ fn main() {
     block_txs.sort_by(|a, b| b.fee.cmp(&a.fee));
 
     // Get the wtxids for the witness root
-    //let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
-    let mut wtx_ids_for_witness_root: Vec<String> = vec![];
+    let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
+    //let mut wtx_ids_for_witness_root: Vec<String> = vec![];
     for tx in &block_txs {
         if tx.is_p2wpkh {
             if let Some(ref wtxid) = tx.wtxid {
