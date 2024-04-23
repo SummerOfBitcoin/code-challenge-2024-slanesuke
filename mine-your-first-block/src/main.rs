@@ -143,7 +143,7 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
     // the witness root hash gets hashed with the witness reserve value and put into
     // the scriptpubkey of the second output
     // Made some edits to work directly with bytes so i didnt have to decode and encode
-    witness_root_vec.insert(0, witness_reserved_value.clone());
+   //witness_root_vec.insert(0, witness_reserved_value.clone());
 
     let witness_root_hash = get_merkle_root(witness_root_vec);
     let concantinated_items = format!("{}{}", witness_root_hash, witness_reserved_value);
@@ -153,7 +153,6 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
     let wtxid_commitment_test =  double_sha256(wtxid_items_bytes);
     let wtxid_commitment = hex::encode(wtxid_commitment_test);
     let scriptpubkey_for_wtxid_test = format!("6a24aa21a9ed{}", wtxid_commitment);
-    let scriptpubkey_for_wtxid_test= format!("6a24aa21a9ed{}", "bd876a00326c912a7f42bedd68240c6e944d7917c3ddea9c63e7787d24655925".to_string());
     coinbase_tx.vout.push(Vout {
         scriptpubkey: scriptpubkey_for_wtxid_test,
         scriptpubkey_asm: "OP_RETURN OP_PUSHBYTES_36 aa21a9ed".to_string() + &wtxid_commitment,
@@ -161,6 +160,10 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
         scriptpubkey_address: None,
         value: 0,
     });
+
+
+
+    // get wtxid
 
 
     coinbase_tx
@@ -1295,23 +1298,6 @@ fn  calculate_transaction_weight(tx: &Transaction)  ->  u64  {
 
 
 fn main() {
-    // let filename = "../mempool/0dd7a4dd29d5db23e049a181b5e658ac25f97730628253e16f96a2d66731248e.json";
-    // //let filename = "../mempool/0ce6a1f1e46bec88ef9138c8cbffbd4141306e36d85395cf1143157d7df30c80.json";
-    // //let filename = "../mempool/0b23caae0dc80d697be1206fc7c652c6460425bff04a6b0a4a5cd5791e09a209.json";
-    // //let filename = "../mempool/0af55b69fab549b98d1f7ec5100b738dad4b520384b3b8f9ff38b25ad1e2940a.json";
-    // //let filename = "../mempool/0aac26114009989817ba396fbfcdb0ab2f2a51a30df5d134d3294aacb27e8f69.json";
-    // let serde_tx = deserialize_tx(filename);
-    // let serde_wtx = serialized_segwit_wtx(&serde_tx);
-    // println!("{}", serde_wtx);
-    // let wtx_bytes = hex::decode(serde_wtx.clone()).unwrap();
-    // let wtxid_be = double_sha256(wtx_bytes);
-    // let mut wtxid_le = wtxid_be;
-    // wtxid_le.reverse();
-    // let wtxid = hex::encode(wtxid_le);
-    // println!();
-    // println!("{}", wtxid);
-    // println!();
-
 
 
     // Uncomment for the project to mine
@@ -1366,8 +1352,8 @@ fn main() {
 
 
     // Get the wtxids for the witness root
-    //let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
-    let mut wtx_ids_for_witness_root: Vec<String> = vec![];
+    let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
+    //let mut wtx_ids_for_witness_root: Vec<String> = vec![];
     for tx in &block_txs {
         if tx.is_p2wpkh {
             if let Some(ref wtxid) = tx.wtxid {
@@ -1380,12 +1366,6 @@ fn main() {
     let coinbase_tx = create_coinbase_tx(total_fees, wtx_ids_for_witness_root.clone());
     let serialized_cb_tx = serialized_segwit_tx(&coinbase_tx);
 
-    let coinbase_wtx = serialized_segwit_wtx(&coinbase_tx);
-    let coinbase_wtx_bytes = hex::decode(coinbase_wtx).unwrap();
-    let coinbase_wtxid_be = double_sha256(coinbase_wtx_bytes);
-    let mut coinbase_wtxid_le = coinbase_wtxid_be;
-    coinbase_wtxid_le.reverse();
-    let coinbase_wtxid = hex::encode(coinbase_wtxid_le);
 
     //println!("{:#?}", coinbase_tx);
     let cd_tx_bytes = hex::decode(serialized_cb_tx.clone()).unwrap();
@@ -1403,7 +1383,7 @@ fn main() {
     let coinbase_tx_for_processing = TransactionForProcessing {
         transaction: coinbase_tx.clone(),
         txid: coinbase_txid.clone(),
-        wtxid: Some(coinbase_wtxid.clone()),
+        wtxid: Some("0000000000000000000000000000000000000000000000000000000000000000".to_string()),
         fee: 0,
         is_p2wpkh: true,
     };
