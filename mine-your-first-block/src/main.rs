@@ -1273,6 +1273,8 @@ fn main() {
             if let Some(ref wtxid) = tx.wtxid {
                 wtx_ids_for_witness_root.push(wtxid.clone());  // Collect wtxid if valid
             }
+        } else {
+            wtx_ids_for_witness_root.push(tx.txid.clone());  // Collect txid if not p2wpkh
         }
     }
 
