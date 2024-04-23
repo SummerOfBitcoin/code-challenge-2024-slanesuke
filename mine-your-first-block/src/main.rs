@@ -87,10 +87,6 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
         sighash: None,
     };
 
-    // Just chose a recent block height
-    let block_height: u32 = 837122;
-    let block_height_bytes = block_height.to_le_bytes();
-    let block_height_hex = hex::encode(block_height_bytes);
 
     //  The block subsidy is 6.25 btc plus the fees from the transactions
     let block_substidy_plus_fees: u64 = 625000000 + total_tx_fee;
@@ -98,10 +94,7 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
     //let scriptpubkey = "41049464205950188c29d377eebca6535e0f3699ce4069ecd77ffebfbd0bcf95e3c134cb7d2742d800a12df41413a09ef87a80516353a2f0a280547bb5512dc03da8ac".to_string();
     let scriptpubkey = "76a91406f1b66fd59a34755c37a8f701f43e937cdbeb1388ac".to_string();
 
-    //let extra_nonce_hex = hex::encode("SlanesukeSOBIntern2024".as_bytes());
-
-    // let block_scriptsig = format!("{}{}", block_height_hex, extra_nonce_hex);
-    // OP_PUSHBYTES_3 + block height (converted it on learnmeabitcoin)
+    // OP_PUSHBYTES_3 + block height (converted it on learnmeabitcoin) block_height = 837122
     let block_scriptsig = "03837122".to_string();
 
     // version is 4 bytes lil endian 01000000
@@ -148,7 +141,6 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
     let witness_root_hash = get_merkle_root(witness_root_vec);
     let concantinated_items = format!("{}{}", witness_root_hash, witness_reserved_value);
 
-    //let wtxid_commitment = double_sha256(commitment_payload);
     let wtxid_items_bytes = hex::decode(concantinated_items).unwrap();
     let wtxid_commitment_test =  double_sha256(wtxid_items_bytes);
     let wtxid_commitment = hex::encode(wtxid_commitment_test);
@@ -160,12 +152,6 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
         scriptpubkey_address: None,
         value: 0,
     });
-
-
-
-    // get wtxid
-
-
     coinbase_tx
 }
 
@@ -1397,7 +1383,6 @@ fn main() {
 
         // Check if the hash meets the target
         if hash_meets_difficulty_target(&block_hash) {
-            //write_block_to_file(&serialized_block_header, &cd_tx_bytes, &block_txs);
             write_block_to_file(&serialized_block_header, &cd_tx_bytes, txids_for_merkle.clone(), &block_txs);
             println!("Success, the block met the target difficulty!");
             break;
