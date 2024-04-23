@@ -1352,9 +1352,21 @@ fn main() {
     // Sorting the transactions from fees in desencding order
     block_txs.sort_by(|a, b| b.fee.cmp(&a.fee));
 
+
+
+    // //creating a coinbase tx without the cb witness commit
+    // let mut temp_cbtx = create_coinbase_tx(total_fees, vec![]);
+    //
+    // let temp_serde_cbtx = serialized_segwit_tx(&temp_cbtx);
+    // let temp_serde_cbtx_bytes = double_sha256(hex::decode(temp_serde_cbtx).unwrap());
+    // let temp_cbtxid_be = hex::encode(temp_serde_cbtx_bytes.iter().rev().collect::<Vec<_>>()); // complcated lil endian
+
+
+
+
     // Get the wtxids for the witness root
     //let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
-    let mut wtx_ids_for_witness_root: Vec<String> = Vec::new();
+    let mut wtx_ids_for_witness_root: Vec<String> = vec![];
     for tx in &block_txs {
         if tx.is_p2wpkh {
             if let Some(ref wtxid) = tx.wtxid {
@@ -1366,6 +1378,13 @@ fn main() {
     // Generate coinbase tx
     let coinbase_tx = create_coinbase_tx(total_fees, wtx_ids_for_witness_root.clone());
     let serialized_cb_tx = serialized_segwit_tx(&coinbase_tx);
+
+    let coinbase_wtx = serialized_segwit_wtx(&coinbase_tx);
+    let coinbase_wtx_bytes = hex::decode(coinbase_wtx).unwrap();
+    let coinbase_wtxid_be = double_sha256(coinbase_wtx_bytes);
+    let mut coinbase_wtxid_le = coinbase_wtxid_be;
+    coinbase_wtxid_le.reverse();
+    let coinbase_wtxid = hex::encode(coinbase_wtxid_le);
 
     //println!("{:#?}", coinbase_tx);
     let cd_tx_bytes = hex::decode(serialized_cb_tx.clone()).unwrap();
@@ -1383,7 +1402,7 @@ fn main() {
     let coinbase_tx_for_processing = TransactionForProcessing {
         transaction: coinbase_tx.clone(),
         txid: coinbase_txid.clone(),
-        wtxid: Some("0000000000000000000000000000000000000000000000000000000000000000".to_string()),
+        wtxid: Some(coinbase_wtxid.clone()),
         fee: 0,
         is_p2wpkh: true,
     };
@@ -1423,6 +1442,9 @@ fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: V
     append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
     for tx in block_txs {
         append_to_file("../output.txt", &tx.txid).unwrap();
+        if tx.is_p2wpkh {
+            println!("{}", tx.wtxid.as_ref().unwrap());
+        }
     }
 }
 
