@@ -78,7 +78,8 @@ struct BlockHeader {
 }
 
 /// This function will return the coinbase transaction
-fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> Transaction {
+fn create_coinbase_tx(total_tx_fee: u64, witness_root_vec: Vec<String>) -> Transaction {
+    // Create a coinbase transaction and return it
     let mut coinbase_tx = Transaction {
         version: 0,
         locktime: 0,
@@ -89,20 +90,19 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
 
 
     //  The block subsidy is 6.25 btc plus the fees from the transactions
-    let block_substidy_plus_fees: u64 = 625000000 + total_tx_fee;
+    let block_sub_plus_fees: u64 = 625000000 + total_tx_fee;
 
-    //let scriptpubkey = "41049464205950188c29d377eebca6535e0f3699ce4069ecd77ffebfbd0bcf95e3c134cb7d2742d800a12df41413a09ef87a80516353a2f0a280547bb5512dc03da8ac".to_string();
+    // A p2pkh scriptpubkey for return address
     let scriptpubkey = "76a91406f1b66fd59a34755c37a8f701f43e937cdbeb1388ac".to_string();
 
-    // OP_PUSHBYTES_3 + block height (converted it on learnmeabitcoin) block_height = 837122
+    // OP_PUSHBYTES_3 + block height. block_height = 837122
     let block_scriptsig = "03837122".to_string();
 
-    // version is 4 bytes lil endian 01000000
+    // version is 4 bytes lil endian 00000000
     coinbase_tx.version = 0;
 
     // witness data
-    let witness_reserved_value = "0000000000000000000000000000000000000000000000000000000000000000".to_string();
-
+    let witness_reserved_value = "0000000000000000000000000000000000000000000000000000000000000000";
     let txid= "0000000000000000000000000000000000000000000000000000000000000000";
     // input count is 1 byte 01
     coinbase_tx.vin.push(Vin {
@@ -128,16 +128,13 @@ fn create_coinbase_tx(total_tx_fee: u64, mut witness_root_vec: Vec<String>) -> T
         scriptpubkey_asm: "OP_DUP OP_HASH160 OP_PUSHBYTES_20 06f1b66fd59a34755c37a8f701f43e937cdbeb13 OP_EQUALVERIFY OP_CHECKSIG".to_string(),
         scriptpubkey_type: "p2pkh".to_string(),
         scriptpubkey_address: None,
-        value: block_substidy_plus_fees,
+        value: block_sub_plus_fees,
     });
 
 
     // Output count 2 for the wtxid stuff
     // the witness root hash gets hashed with the witness reserve value and put into
     // the scriptpubkey of the second output
-    // Made some edits to work directly with bytes so i didnt have to decode and encode
-   //witness_root_vec.insert(0, witness_reserved_value.clone());
-
     let witness_root_hash = get_merkle_root(witness_root_vec);
     let concant_items = format!("{}{}", witness_root_hash, witness_reserved_value);
 
@@ -208,8 +205,7 @@ fn serialize_block_header(block_header: &BlockHeader) -> Vec<u8> {
 /// This function calcluates the merkle root. It putes txids in natural byte order then
 /// Hashes the tree
 fn get_merkle_root(txids: Vec<String>) -> String {
-    // WTF I converted it to big endian but it gave me the wrong merkle root so
-    // I will just keep it in little endian and reverse the bytes when hashing (ithink)
+    // Convert the txids to big endian to hash
     let mut be_txid = txids.iter()
         .map(|txid| {
             let decoded_id = hex::decode(txid).unwrap();
@@ -237,17 +233,15 @@ fn get_merkle_root(txids: Vec<String>) -> String {
                 hasher.finalize().try_into().expect("Hash should be 32 bytes")
             }).collect()
     }
-    // The last hash in the merkle tree
+
     // merkle root in little endian
     let merkle_root = be_txid[0].to_vec();
-    //let merkle_root_be = merkle_root.iter().rev().cloned().collect::<Vec<u8>>();
     hex::encode(merkle_root)
 }
 
 fn deserialize_tx(filename: &str) -> Transaction {
     //  Open the file of a tx
     let file = File::open(filename).unwrap();
-
     let reader = BufReader::new(file);
     let tx: Transaction = serde_json::from_reader(reader).unwrap();
 
@@ -278,14 +272,14 @@ fn serialize_tx(transaction: &Transaction) -> String {
         let reversed_txid = hex::encode(reversed_txid_bytes);
         serialized_tx.push_str(&reversed_txid);
 
-
+        // Serialize vout
         let vout = &vin.vout.to_le_bytes();
         serialized_tx.push_str(&hex::encode(vout));
-
 
         // Serialize scriptSig size I kept getting trailing zeros after my compactsize hex
         let scriptsig_size = vin.scriptsig.len() / 2;
 
+        // IMPLEMENT THE COMPACT SIZE FUNCTION (this was first draft)
         // So I had to do this to remove the trailing zeros
         // It basically converts the u64 to bytes then to a vec then removes the trailing zeros
         let mut scriptsig_size_bytes = (scriptsig_size as u64).to_le_bytes().to_vec();
@@ -537,8 +531,6 @@ fn verify_signature(
     let public_key =  PublicKey::from_slice(&pubkey).expect("Failed to create public key");
     let signature = Signature::from_der(&signature).unwrap();
 
-
-
     // Return Ok(true) if the signature is valid, Ok(false) if it's invalid
     match secp.verify_ecdsa(&message_result, &signature,  &public_key) {
         Ok(_) => {
@@ -583,7 +575,6 @@ fn get_signature_and_publickey_from_scriptsig(scriptsig: &str) -> Result<(String
     if sig_and_pubkey_vec.len() != 2 {
         return Err(format!("Expected 2 elements, found {}", sig_and_pubkey_vec.len()).into());
     }
-
 
     Ok((sig_and_pubkey_vec[0].clone(), sig_and_pubkey_vec[1].clone()))
 }
@@ -674,9 +665,7 @@ fn get_segwit_tx_message(
     let vout = vin.vout.to_le_bytes();
     let vout = hex::encode(vout);
 
-
     let input = format!("{}{}", txid, vout);
-
 
     // Create a scriptcode for the input being signed
     let scriptcode = format!("1976a914{}88ac", pubkey_hash);
@@ -1014,8 +1003,6 @@ fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, Strin
                             ).into());
                         }
                     }
-
-
                 }
                 _ => {
                     // If it's not an operator,it'a ordinary data (like sig or pubkey) and push it onto the stack
@@ -1335,9 +1322,6 @@ fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], txs: V
     append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
     for tx in block_txs {
         append_to_file("../output.txt", &tx.txid).unwrap();
-        // if tx.is_p2wpkh {
-        //     println!("{}", tx.wtxid.as_ref().unwrap());
-        // }
     }
 }
 
