@@ -1294,21 +1294,22 @@ fn  calculate_transaction_weight(tx: &Transaction)  ->  u64  {
 
 
 fn main() {
-    let filename = "../0dd7a4dd29d5db23e049a181b5e658ac25f97730628253e16f96a2d66731248e.json";
-    let filename = "../mempool/0ce6a1f1e46bec88ef9138c8cbffbd4141306e36d85395cf1143157d7df30c80.json";
-    let filename = "../mempool/0b23caae0dc80d697be1206fc7c652c6460425bff04a6b0a4a5cd5791e09a209.json";
-    let filename = "../mempool/0af55b69fab549b98d1f7ec5100b738dad4b520384b3b8f9ff38b25ad1e2940a.json";
-    let filename = "../mempool/0aac26114009989817ba396fbfcdb0ab2f2a51a30df5d134d3294aacb27e8f69.json";
-    let serde_tx = deserialize_tx(filename);
-    let serde_wtx = serialized_segwit_wtx(&serde_tx);
-    //println!("{}", serde_wtx);
-    let wtx_bytes = hex::decode(serde_wtx.clone()).unwrap();
-    let wtxid_be = double_sha256(wtx_bytes);
-    let mut wtxid_le = wtxid_be;
-    wtxid_le.reverse();
-    let wtxid = hex::encode(wtxid_le);
+    // let filename = "../mempool/0dd7a4dd29d5db23e049a181b5e658ac25f97730628253e16f96a2d66731248e.json";
+    // //let filename = "../mempool/0ce6a1f1e46bec88ef9138c8cbffbd4141306e36d85395cf1143157d7df30c80.json";
+    // //let filename = "../mempool/0b23caae0dc80d697be1206fc7c652c6460425bff04a6b0a4a5cd5791e09a209.json";
+    // //let filename = "../mempool/0af55b69fab549b98d1f7ec5100b738dad4b520384b3b8f9ff38b25ad1e2940a.json";
+    // //let filename = "../mempool/0aac26114009989817ba396fbfcdb0ab2f2a51a30df5d134d3294aacb27e8f69.json";
+    // let serde_tx = deserialize_tx(filename);
+    // let serde_wtx = serialized_segwit_wtx(&serde_tx);
+    // println!("{}", serde_wtx);
+    // let wtx_bytes = hex::decode(serde_wtx.clone()).unwrap();
+    // let wtxid_be = double_sha256(wtx_bytes);
+    // let mut wtxid_le = wtxid_be;
+    // wtxid_le.reverse();
+    // let wtxid = hex::encode(wtxid_le);
     // println!();
     // println!("{}", wtxid);
+    // println!();
 
 
 
@@ -1329,7 +1330,7 @@ fn main() {
     let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
     let mut total_weight = 0u64;
     //let max_block_weight = 1000000u64;
-    let max_block_weight = 200000u64;
+    let max_block_weight = 300000u64;
     let mut total_fees = 0u64;
 
     // Sort transactions by fee in descending order before processing
