@@ -1316,8 +1316,8 @@ fn main() {
     // Initializing block weight
     let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
     let mut total_weight = 0u64;
-    //let max_block_weight = 1000000u64;
-    let max_block_weight = 205000u64;
+    let max_block_weight = 1000000u64;
+    //let max_block_weight = 205000u64;
     let mut total_fees = 0u64;
 
     // Sort transactions by fee in descending order before processing
@@ -1340,13 +1340,6 @@ fn main() {
     block_txs.sort_by(|a, b| b.fee.cmp(&a.fee));
 
 
-
-    // //creating a coinbase tx without the cb witness commit
-    // let mut temp_cbtx = create_coinbase_tx(total_fees, vec![]);
-    //
-    // let temp_serde_cbtx = serialized_segwit_tx(&temp_cbtx);
-    // let temp_serde_cbtx_bytes = double_sha256(hex::decode(temp_serde_cbtx).unwrap());
-    // let temp_cbtxid_be = hex::encode(temp_serde_cbtx_bytes.iter().rev().collect::<Vec<_>>()); // complcated lil endian
 
 
 
