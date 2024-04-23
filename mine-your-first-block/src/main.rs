@@ -1330,7 +1330,7 @@ fn main() {
     let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
     let mut total_weight = 0u64;
     //let max_block_weight = 1000000u64;
-    let max_block_weight = 300000u64;
+    let max_block_weight = 300001u64;
     let mut total_fees = 0u64;
 
     // Sort transactions by fee in descending order before processing
