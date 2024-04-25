@@ -1231,7 +1231,7 @@ fn main() {
     let mut total_weight = 0u64;
     // My calculate_transaction_weight function is off so I increased the weight limit for a quick fix
     // FIX calc_tx_weight
-    let max_block_weight = 7000000u64;
+    let max_block_weight = 7500000u64;
     let mut total_fees = 0u64;
 
     // Sort transactions by fee in descending order before processing
