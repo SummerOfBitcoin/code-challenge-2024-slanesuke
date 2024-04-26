@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use serde_json;
 
 // Transaction struct that may be overcomplicated right now. We will see
 #[derive(Debug, Deserialize, Clone)]
