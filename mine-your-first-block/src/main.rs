@@ -7,10 +7,7 @@ use transactions::*;
 use validation::*;
 use utils::*;
 use block::*;
-
 use itertools::Itertools;
-extern crate secp256k1;
-
 
 fn main() {
     // Path to the mempool folder
