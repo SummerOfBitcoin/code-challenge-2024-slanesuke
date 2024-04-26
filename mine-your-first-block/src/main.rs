@@ -1,3 +1,9 @@
+mod transactions;
+
+use transactions::Transaction;
+
+use transactions::*;
+
 use std::fmt::{Debug};
 use serde::Deserialize;
 use serde_json;
@@ -16,66 +22,6 @@ use secp256k1::ecdsa::Signature;
 use primitive_types::U256;
 use byteorder::{LittleEndian, WriteBytesExt};
 
-
-
-// Transaction struct that may be overcomplicated right now. We will see
-#[derive(Debug, Deserialize, Clone)]
-struct Transaction {
-    version: u32,
-    locktime: u32,
-    vin: Vec<Vin>,
-    vout: Vec<Vout>,
-    sighash: Option<String>,
-}
-
-// This struct is used to store the transaction and its fee for processing into the block
-#[derive(Clone)]
-struct TransactionForProcessing {
-    transaction: Transaction,
-    txid: String,
-    wtxid: Option<String>,
-    fee: u64,
-    is_p2wpkh: bool,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-struct Vin {
-    txid: String,
-    vout: u32,
-    prevout: Prevout,
-    scriptsig: String,
-    scriptsig_asm: String,
-    witness: Option<Vec<String>>,
-    is_coinbase: bool,
-    sequence: u32,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-struct Prevout {
-    scriptpubkey: String,
-    scriptpubkey_asm: String,
-    scriptpubkey_type: String,
-    scriptpubkey_address: String,
-    value: u64,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-struct Vout {
-    scriptpubkey: String,
-    scriptpubkey_asm: String,
-    scriptpubkey_type: String,
-    scriptpubkey_address: Option<String>,
-    value: u64,
-}
-
-struct BlockHeader {
-    version: u32,
-    prev_block_hash: String,
-    merkle_root: String,
-    timestamp: u32,
-    bits: u32,
-    nonce: u32
-}
 
 /// This function will return the coinbase transaction
 fn create_coinbase_tx(total_tx_fee: u64, witness_root_vec: Vec<String>) -> Transaction {
