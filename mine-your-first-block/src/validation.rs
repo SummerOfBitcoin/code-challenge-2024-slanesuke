@@ -125,19 +125,6 @@ pub fn verify_signature(
     }
 }
 
-/// This function will validate P2PK transactions
-// pub fn p2pk_tx_validation(transaction: &mut Transaction) -> Result<(bool, String), Box<dyn Error>> {
-//     // Create a stack to hold the data
-//     let mut stack = Vec::new();
-//
-//     for (i, vin) in transaction.vin.iter().enumerate() {
-//         // Clear the stack for each input
-//         stack.clear();
-//
-//     }
-//     Ok((true, String::new()))
-// }
-
 // Transaction validation
 /// This function will validate P2WPKH transactions
 pub fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, String, String), Box<dyn Error>> {
@@ -270,13 +257,13 @@ pub fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, 
     let serialized_validwtx = serialized_segwit_wtx(transaction);
     let wtx_bytes = hex::decode(serialized_validwtx.clone())?;
     let wtxid_be = double_sha256(wtx_bytes);
-    let wtxid = reverse_bytes(wtxid_be);
+    let wtxid = reverse_bytes(wtxid_be.to_vec());
 
     // FOR TXID
     let serialized_validtx = serialized_segwit_tx(transaction);
     let tx_bytes = hex::decode(serialized_validtx).unwrap();
     let txid_be = double_sha256(tx_bytes);
-    let txid = reverse_bytes(txid_be);
+    let txid = reverse_bytes(txid_be.to_vec());
 
     Ok((true, wtxid, txid))
 }
@@ -293,7 +280,6 @@ pub fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, S
         stack.clear();
 
         // Get ScriptSig and ScriptPubKey
-        // Should i just do this from the ScriptSig_asm???
         let scriptsig = &vin.scriptsig;
         let script_pub_key = &vin.prevout.scriptpubkey_asm.clone();
 
@@ -405,7 +391,7 @@ pub fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, S
     let serialized_validtx = serialize_tx(transaction);
     let tx_bytes = hex::decode(serialized_validtx).unwrap();
     let txid_be = double_sha256(tx_bytes);
-    let txid = reverse_bytes(txid_be);
+    let txid = reverse_bytes(txid_be.to_vec());
 
     Ok((true, txid))
 }

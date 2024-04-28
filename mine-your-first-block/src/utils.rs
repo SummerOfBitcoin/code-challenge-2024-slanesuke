@@ -453,8 +453,9 @@ pub fn get_segwit_tx_message(
     let vin = &tx.vin[vin_index];
 
     let txid_bytes = hex::decode(vin.txid.clone()).unwrap();
-    let reversed_txid_bytes: Vec<u8> = txid_bytes.into_iter().rev().collect();
-    let txid = hex::encode(reversed_txid_bytes);
+    // let reversed_txid_bytes: Vec<u8> = txid_bytes.into_iter().rev().collect();
+    // let txid = hex::encode(reversed_txid_bytes);
+    let txid = reverse_bytes(txid_bytes);
 
     let vout = vin.vout.to_le_bytes();
     let vout = hex::encode(vout);
@@ -598,7 +599,7 @@ pub fn get_tx_readyfor_signing_legacy(transaction : &mut Transaction) -> Transac
 }
 
 /// This function will
-pub fn reverse_bytes(mut bytes: [u8; 32]) -> String {
+pub fn reverse_bytes(mut bytes: Vec<u8>) -> String {
     bytes.reverse();
     hex::encode(bytes)
 }
