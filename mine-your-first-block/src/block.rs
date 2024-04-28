@@ -27,12 +27,11 @@ pub fn create_coinbase_tx(total_tx_fee: u64, witness_root_vec: Vec<String>) -> T
     // version is 4 bytes lil endian 00000000
     coinbase_tx.version = 0;
 
-    // witness data
-    let witness_reserved_value = "0000000000000000000000000000000000000000000000000000000000000000";
-    let txid= "0000000000000000000000000000000000000000000000000000000000000000";
+    // witness data also
+    let txid= "0000000000000000000000000000000000000000000000000000000000000000".to_string();
     // input count is 1 byte 01
     coinbase_tx.vin.push(Vin {
-        txid: txid.to_string(),
+        txid: txid,
         vout: 0xffffffff,
         prevout: Prevout {
             scriptpubkey: "".to_string(),
@@ -43,7 +42,7 @@ pub fn create_coinbase_tx(total_tx_fee: u64, witness_root_vec: Vec<String>) -> T
         },
         scriptsig: block_scriptsig,
         scriptsig_asm: "OP_PUSHBYTES_3 837122".to_string(),
-        witness: Some(vec![witness_reserved_value.to_string()]),
+        witness: Some(vec![txid]),
         is_coinbase: true,
         sequence: 0xffffffff,
     });
@@ -62,7 +61,8 @@ pub fn create_coinbase_tx(total_tx_fee: u64, witness_root_vec: Vec<String>) -> T
     // the witness root hash gets hashed with the witness reserve value and put into
     // the scriptpubkey of the second output
     let witness_root_hash = get_merkle_root(witness_root_vec);
-    let concant_items = format!("{}{}", witness_root_hash, witness_reserved_value);
+    // the txid below is the witness reserve value. It's just a 32 byte string of numbers
+    let concant_items = format!("{}{}", witness_root_hash, txid);
 
     let wtxid_items_bytes = hex::decode(concant_items).unwrap();
     let wtxid_commitment_test =  double_sha256(wtxid_items_bytes);
