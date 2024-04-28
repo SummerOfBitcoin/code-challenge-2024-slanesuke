@@ -459,6 +459,6 @@ pub fn  calculate_transaction_weight(tx: &Transaction)  ->  u64  {
     // Calculate weight of the transaction
     let tx_weight = base_size * 3 + total_size;
 
-    tx_weight * 1.5 as u64  // Return the weight of the transaction
+    tx_weight * 1.8 as u64  // Return the weight of the transaction
 }
 
