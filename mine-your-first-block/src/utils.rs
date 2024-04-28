@@ -596,3 +596,10 @@ pub fn get_tx_readyfor_signing_legacy(transaction : &mut Transaction) -> Transac
         sighash: transaction.sighash.clone(),
     }
 }
+
+/// This function will
+pub fn reverse_bytes(hex_string: String) -> String {
+    let mut bytes = hex::decode(hex_string).unwrap();
+    bytes.reverse();
+    hex::encode(bytes)
+}
