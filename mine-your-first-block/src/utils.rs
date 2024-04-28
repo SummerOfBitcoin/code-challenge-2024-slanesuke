@@ -202,12 +202,8 @@ pub fn serialized_segwit_tx(transaction: &Transaction) -> String {
             serialized_tx.push_str("00");
         } else {
             // Serialize scriptSig size
-            let scriptsig_size = vin.scriptsig.len() / 2;
-            let mut scriptsig_size_bytes = (scriptsig_size as u64).to_le_bytes().to_vec();
-            if let Some(last_non_zero_position) = scriptsig_size_bytes.iter().rposition(|&x| x != 0) {
-                scriptsig_size_bytes.truncate(last_non_zero_position + 1);
-            }
-            let scriptsig_size_hex = hex::encode(&scriptsig_size_bytes);
+            let scriptsig_size_hex = compact_size_as_bytes(vin.scriptsig.len() / 2);
+            let scriptsig_size_hex = hex::encode(&scriptsig_size_hex);
             serialized_tx.push_str(&scriptsig_size_hex);
 
             // Now push scriptsig itself
@@ -229,12 +225,6 @@ pub fn serialized_segwit_tx(transaction: &Transaction) -> String {
         serialized_tx.push_str(&hex::encode(value));
 
         // Now push the scriptpubkey compact size
-        // let scriptpubkey_size = vout.scriptpubkey.len() / 2;
-        // let mut scriptpubkey_size_bytes = (scriptpubkey_size as u64).to_le_bytes().to_vec();
-        // if let Some(last_non_zero_position) = scriptpubkey_size_bytes.iter().rposition(|&x| x != 0) {
-        //     scriptpubkey_size_bytes.truncate(last_non_zero_position + 1);
-        // }
-        // let scriptpubkey_size_hex = hex::encode(&scriptpubkey_size_bytes);
         let scriptpubkey_size_hex = compact_size_as_bytes(vout.scriptpubkey.len() / 2);
         let scriptpubkey_size_hex = hex::encode(&scriptpubkey_size_hex);
         serialized_tx.push_str(&scriptpubkey_size_hex);
