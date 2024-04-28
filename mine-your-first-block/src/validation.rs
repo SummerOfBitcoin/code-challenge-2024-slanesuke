@@ -255,12 +255,12 @@ pub fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, 
     // May need to change this a bit...
     // FOR WTXID
     let serialized_validwtx = serialized_segwit_wtx(transaction);
-    // let wtx_bytes = hex::decode(serialized_validwtx.clone())?;
-    // let wtxid_be = double_sha256(wtx_bytes);
+    let wtx_bytes = hex::decode(serialized_validwtx.clone())?;
+    let wtxid_be = double_sha256(wtx_bytes);
     // let mut wtxid_le = wtxid_be;
     // wtxid_le.reverse();
     // let wtxid = hex::encode(wtxid_le);
-    let wtxid = reverse_bytes(serialized_validwtx.clone());
+    let wtxid = reverse_bytes(wtxid_be);
 
     // FOR TXID
     let serialized_validtx = serialized_segwit_tx(transaction);
