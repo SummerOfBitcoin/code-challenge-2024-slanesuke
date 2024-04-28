@@ -67,7 +67,7 @@ pub fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProce
 
                 // Get the fee if valid so  i can add it to my vec
                 let fee = verify_tx_fee(&transaction);
-                if fee < 700 {
+                if fee < 1200 {
                     //eprintln!("Transaction has a negative fee: {:?}", path);
                     continue;
                 }
