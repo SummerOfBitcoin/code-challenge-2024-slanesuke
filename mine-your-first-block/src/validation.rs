@@ -7,7 +7,7 @@ use std::error::Error;
 use std::fs;
 use secp256k1::ecdsa::Signature;
 use primitive_types::U256;
-use crate::utils::{deserialize_tx, double_sha256, get_segwit_tx_message, get_signature_and_publickey_from_scriptsig, get_tx_readyfor_signing_legacy, ripemd160, serialize_tx, serialized_segwit_tx, serialized_segwit_wtx, sha256};
+use crate::utils::{deserialize_tx, double_sha256, get_segwit_tx_message, get_signature_and_publickey_from_scriptsig, get_tx_readyfor_signing_legacy, reverse_bytes, ripemd160, serialize_tx, serialized_segwit_tx, serialized_segwit_wtx, sha256};
 
 /// This function will read through the mempool folder and validate the transactions before adding
 /// them to a transaction for processing vector
@@ -255,11 +255,12 @@ pub fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, 
     // May need to change this a bit...
     // FOR WTXID
     let serialized_validwtx = serialized_segwit_wtx(transaction);
-    let wtx_bytes = hex::decode(serialized_validwtx.clone())?;
-    let wtxid_be = double_sha256(wtx_bytes);
-    let mut wtxid_le = wtxid_be;
-    wtxid_le.reverse();
-    let wtxid = hex::encode(wtxid_le);
+    // let wtx_bytes = hex::decode(serialized_validwtx.clone())?;
+    // let wtxid_be = double_sha256(wtx_bytes);
+    // let mut wtxid_le = wtxid_be;
+    // wtxid_le.reverse();
+    // let wtxid = hex::encode(wtxid_le);
+    let wtxid = reverse_bytes(serialized_validwtx.clone());
 
     // FOR TXID
     let serialized_validtx = serialized_segwit_tx(transaction);
