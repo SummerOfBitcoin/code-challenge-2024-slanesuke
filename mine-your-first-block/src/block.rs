@@ -31,7 +31,7 @@ pub fn create_coinbase_tx(total_tx_fee: u64, witness_root_vec: Vec<String>) -> T
     let txid= "0000000000000000000000000000000000000000000000000000000000000000".to_string();
     // input count is 1 byte 01
     coinbase_tx.vin.push(Vin {
-        txid: txid,
+        txid,
         vout: 0xffffffff,
         prevout: Prevout {
             scriptpubkey: "".to_string(),
@@ -78,7 +78,7 @@ pub fn create_coinbase_tx(total_tx_fee: u64, witness_root_vec: Vec<String>) -> T
     coinbase_tx
 }
 
-// This function creates the block header struct
+/// This function creates the block header struct
 pub fn construct_block_header(nonce: u32, merkle_root: String) -> BlockHeader {
 
     let mut block_header = BlockHeader{
@@ -103,8 +103,6 @@ pub fn construct_block_header(nonce: u32, merkle_root: String) -> BlockHeader {
     block_header.timestamp = timestamp as u32;
 
     // Nonce
-    // 4 byte little endian unsigned integer
-    // I guess start nonce at 0 and increment until the block hash is less than the target
     block_header.nonce = nonce; // pass in a nonce from main
 
     block_header
