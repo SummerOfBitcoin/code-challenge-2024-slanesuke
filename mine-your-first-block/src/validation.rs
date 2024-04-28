@@ -126,9 +126,17 @@ pub fn verify_signature(
 }
 
 /// This function will validate P2PK transactions
-pub fn p2pk_tx_validation(transaction: &mut Transaction) -> Result<(bool, String), Box<dyn Error>> {
-
-}
+// pub fn p2pk_tx_validation(transaction: &mut Transaction) -> Result<(bool, String), Box<dyn Error>> {
+//     // Create a stack to hold the data
+//     let mut stack = Vec::new();
+//
+//     for (i, vin) in transaction.vin.iter().enumerate() {
+//         // Clear the stack for each input
+//         stack.clear();
+//
+//     }
+//     Ok((true, String::new()))
+// }
 
 // Transaction validation
 /// This function will validate P2WPKH transactions
