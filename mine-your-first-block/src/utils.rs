@@ -188,8 +188,7 @@ pub fn serialized_segwit_tx(transaction: &Transaction) -> String {
         // Serialize txid and push
         //serialized_tx.push_str(&vin.txid);
         let txid_bytes = hex::decode(&vin.txid).unwrap();
-        let reversed_txid_bytes: Vec<u8> = txid_bytes.into_iter().rev().collect();
-        let reversed_txid = hex::encode(reversed_txid_bytes);
+        let reversed_txid= reverse_bytes(txid_bytes);
         serialized_tx.push_str(&reversed_txid);
 
         // Serialize vout and push
