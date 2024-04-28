@@ -451,14 +451,16 @@ pub fn hash_meets_difficulty_target(hash: &str) -> bool {
     hash_as_num < target
 }
 
-pub fn  calculate_transaction_weight(tx: &Transaction)  ->  u64  {
+pub fn calculate_transaction_weight(tx: &Transaction) -> u64 {
     // Serialized tx size without witness
     let base_size = serialize_tx(tx).len() as u64;
-    let total_size = base_size; // Need to update once i include more tx types
+
+    // Serialized tx size with witness
+    let total_size = serialized_segwit_tx(tx).len() as u64;
 
     // Calculate weight of the transaction
     let tx_weight = base_size * 3 + total_size;
 
-    tx_weight * 2  // Return the weight of the transaction
+    tx_weight   // Return the weight of the transaction
 }
 
