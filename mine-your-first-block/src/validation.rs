@@ -125,6 +125,11 @@ pub fn verify_signature(
     }
 }
 
+/// This function will validate P2PK transactions
+pub fn p2pk_tx_validation(transaction: &mut Transaction) -> Result<(bool, String), Box<dyn Error>> {
+
+}
+
 // Transaction validation
 /// This function will validate P2WPKH transactions
 pub fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, String, String), Box<dyn Error>> {
@@ -460,5 +465,6 @@ pub fn  calculate_transaction_weight(tx: &Transaction)  ->  u64  {
     // Calculate weight of the transaction
     let tx_weight = base_size * 3 + total_size;
 
-    tx_weight * 2 // Return the weight of the transaction
+    tx_weight  // Return the weight of the transaction
 }
+
