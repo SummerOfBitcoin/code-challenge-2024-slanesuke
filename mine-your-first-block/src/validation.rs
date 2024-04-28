@@ -257,18 +257,13 @@ pub fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, 
     let serialized_validwtx = serialized_segwit_wtx(transaction);
     let wtx_bytes = hex::decode(serialized_validwtx.clone())?;
     let wtxid_be = double_sha256(wtx_bytes);
-    // let mut wtxid_le = wtxid_be;
-    // wtxid_le.reverse();
-    // let wtxid = hex::encode(wtxid_le);
     let wtxid = reverse_bytes(wtxid_be);
 
     // FOR TXID
     let serialized_validtx = serialized_segwit_tx(transaction);
     let tx_bytes = hex::decode(serialized_validtx).unwrap();
     let txid_be = double_sha256(tx_bytes);
-    let mut txid_le = txid_be;
-    txid_le.reverse();
-    let txid = hex::encode(txid_le);
+    let txid = reverse_bytes(txid_be);
 
     Ok((true, wtxid, txid))
 }
@@ -397,9 +392,7 @@ pub fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, S
     let serialized_validtx = serialize_tx(transaction);
     let tx_bytes = hex::decode(serialized_validtx).unwrap();
     let txid_be = double_sha256(tx_bytes);
-    let mut txid_le = txid_be;
-    txid_le.reverse();
-    let txid = hex::encode(txid_le);
+    let txid = reverse_bytes(txid_be);
 
     Ok((true, txid))
 }
@@ -467,5 +460,5 @@ pub fn  calculate_transaction_weight(tx: &Transaction)  ->  u64  {
     // Calculate weight of the transaction
     let tx_weight = base_size * 3 + total_size;
 
-    tx_weight
+    tx_weight * 2 // Return the weight of the transaction
 }
