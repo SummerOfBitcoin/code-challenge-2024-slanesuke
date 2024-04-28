@@ -567,3 +567,16 @@ pub fn reverse_bytes(mut bytes: Vec<u8>) -> String {
     bytes.reverse();
     hex::encode(bytes)
 }
+
+pub fn calculate_transaction_weight(tx: &Transaction) -> u64 {
+    // Serialized tx size without witness
+    let base_size = serialize_tx(tx).len() as u64;
+
+    // Serialized tx size with witness
+    let total_size = serialized_segwit_tx(tx).len() as u64;
+
+    // Calculate weight of the transaction
+    let tx_weight = base_size * 3 + total_size;
+
+    tx_weight   // Return the weight of the transaction
+}
