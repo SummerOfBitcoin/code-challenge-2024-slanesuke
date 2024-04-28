@@ -67,10 +67,10 @@ pub fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProce
 
                 // Get the fee if valid so  i can add it to my vec
                 let fee = verify_tx_fee(&transaction);
-                if fee < 1000 {
-                    //eprintln!("Transaction has a negative fee: {:?}", path);
-                    continue;
-                }
+                // if fee < 1000 {
+                //     //eprintln!("Transaction has a negative fee: {:?}", path);
+                //     continue;
+                // }
 
                 // // Remove dust transactions
                 // let min_relay_fee_per_byte: u64 = 1; // 3 satoshis per byte  could go up or down 1-5
@@ -399,17 +399,11 @@ pub fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, S
 // Other smaller validations
 /// This function will remove dust transactions from a transaction
 // I will need to look more into this
-pub fn is_dust_output(output: &Vout, min_fee_per_byte: u64) -> bool {
-    // Looked up the avg size of a P2PKH input
-    let input_size = 148;
-    // Calculate the minimum value that makes spending this output worthwhile
-    let min_output_value = input_size * min_fee_per_byte;
-    output.value < min_output_value
-}
+//
 
-pub fn remove_dust_transactions(transaction: &mut Transaction, min_fee_per_byte: u64) {
-    transaction.vout.retain(|output| !is_dust_output(output, min_fee_per_byte));
-}
+// pub fn remove_dust_transactions(transaction: &mut Transaction, min_fee_per_byte: u64) {
+//     transaction.vout.retain(|output| !is_dust_output(output, min_fee_per_byte));
+// }
 
 /// Function to get the tx amount so
 pub fn verify_tx_fee(transaction: &Transaction) -> u64 {

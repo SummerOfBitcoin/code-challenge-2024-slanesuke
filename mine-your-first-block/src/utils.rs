@@ -77,7 +77,7 @@ pub fn serialize_block_header(block_header: &BlockHeader) -> Vec<u8> {
 }
 
 //  Transaction serializations
-/// This function will serialize a transaction into a string of hex bytes
+/// This function will serialize a transaction into a hex string
 pub fn serialize_tx(transaction: &Transaction) -> String {
     // Returning the serialized tx as a string
     let mut serialized_tx = String::new();
