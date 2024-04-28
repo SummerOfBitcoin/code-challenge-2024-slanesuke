@@ -67,13 +67,13 @@ pub fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProce
 
                 // Get the fee if valid so  i can add it to my vec
                 let fee = verify_tx_fee(&transaction);
-                if fee < 1200 {
+                if fee < 1000 {
                     //eprintln!("Transaction has a negative fee: {:?}", path);
                     continue;
                 }
 
                 // Remove dust transactions
-                let min_relay_fee_per_byte: u64 = 3; // 3 satoshis per byte  could go up or down 1-5
+                let min_relay_fee_per_byte: u64 = 2; // 3 satoshis per byte  could go up or down 1-5
                 remove_dust_transactions(&mut transaction, min_relay_fee_per_byte);
 
                 // Check for double spending
