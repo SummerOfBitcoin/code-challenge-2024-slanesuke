@@ -229,12 +229,14 @@ pub fn serialized_segwit_tx(transaction: &Transaction) -> String {
         serialized_tx.push_str(&hex::encode(value));
 
         // Now push the scriptpubkey compact size
-        let scriptpubkey_size = vout.scriptpubkey.len() / 2;
-        let mut scriptpubkey_size_bytes = (scriptpubkey_size as u64).to_le_bytes().to_vec();
-        if let Some(last_non_zero_position) = scriptpubkey_size_bytes.iter().rposition(|&x| x != 0) {
-            scriptpubkey_size_bytes.truncate(last_non_zero_position + 1);
-        }
-        let scriptpubkey_size_hex = hex::encode(&scriptpubkey_size_bytes);
+        // let scriptpubkey_size = vout.scriptpubkey.len() / 2;
+        // let mut scriptpubkey_size_bytes = (scriptpubkey_size as u64).to_le_bytes().to_vec();
+        // if let Some(last_non_zero_position) = scriptpubkey_size_bytes.iter().rposition(|&x| x != 0) {
+        //     scriptpubkey_size_bytes.truncate(last_non_zero_position + 1);
+        // }
+        // let scriptpubkey_size_hex = hex::encode(&scriptpubkey_size_bytes);
+        let scriptpubkey_size_hex = compact_size_as_bytes(vout.scriptpubkey.len() / 2);
+        let scriptpubkey_size_hex = hex::encode(&scriptpubkey_size_hex);
         serialized_tx.push_str(&scriptpubkey_size_hex);
         serialized_tx.push_str(&vout.scriptpubkey);
     }
@@ -279,11 +281,9 @@ pub fn serialized_segwit_wtx(transaction: &Transaction) -> String {
 
 
     for vin in &transaction.vin {
-        // Serialize txid and push
-        // I believe the txid needs to be in reversed byte order
+        // Serialize txid, reverse the bytes and push
         let txid_bytes = hex::decode(&vin.txid).unwrap();
-        let reversed_txid_bytes: Vec<u8> = txid_bytes.into_iter().rev().collect();
-        let reversed_txid = hex::encode(reversed_txid_bytes);
+        let reversed_txid = reverse_bytes(txid_bytes);
         serialized_tx.push_str(&reversed_txid);
 
 
@@ -441,7 +441,6 @@ pub fn get_segwit_tx_message(
         input_bytes.extend_from_slice(&reversed_txid_bytes);
         input_bytes.extend_from_slice(&vout_bytes);
 
-
         //sequence
         let sequence_bytes = vin.sequence.to_le_bytes();
         sequences_bytes.extend_from_slice(&sequence_bytes);
@@ -453,8 +452,6 @@ pub fn get_segwit_tx_message(
     let vin = &tx.vin[vin_index];
 
     let txid_bytes = hex::decode(vin.txid.clone()).unwrap();
-    // let reversed_txid_bytes: Vec<u8> = txid_bytes.into_iter().rev().collect();
-    // let txid = hex::encode(reversed_txid_bytes);
     let txid = reverse_bytes(txid_bytes);
 
     let vout = vin.vout.to_le_bytes();
