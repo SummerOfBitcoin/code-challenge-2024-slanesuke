@@ -107,19 +107,21 @@ pub fn serialize_tx(transaction: &Transaction) -> String {
         let vout = &vin.vout.to_le_bytes();
         serialized_tx.push_str(&hex::encode(vout));
 
-        // Serialize scriptSig size I kept getting trailing zeros after my compactsize hex
-        let scriptsig_size = vin.scriptsig.len() / 2;
-
-        // IMPLEMENT THE COMPACT SIZE FUNCTION (this was first draft)
-        // So I had to do this to remove the trailing zeros
-        // It basically converts the u64 to bytes then to a vec then removes the trailing zeros
-        let mut scriptsig_size_bytes = (scriptsig_size as u64).to_le_bytes().to_vec();
-
-        if let Some(last_non_zero_position) = scriptsig_size_bytes.iter().rposition(|&x| x != 0) {
-            scriptsig_size_bytes.truncate(last_non_zero_position + 1);
-        }
-
-        let scriptsig_size_hex = hex::encode(&scriptsig_size_bytes);
+        // // Serialize scriptSig size I kept getting trailing zeros after my compactsize hex
+        // let scriptsig_size = vin.scriptsig.len() / 2;
+        //
+        // // IMPLEMENT THE COMPACT SIZE FUNCTION (this was first draft)
+        // // So I had to do this to remove the trailing zeros
+        // // It basically converts the u64 to bytes then to a vec then removes the trailing zeros
+        // let mut scriptsig_size_bytes = (scriptsig_size as u64).to_le_bytes().to_vec();
+        //
+        // if let Some(last_non_zero_position) = scriptsig_size_bytes.iter().rposition(|&x| x != 0) {
+        //     scriptsig_size_bytes.truncate(last_non_zero_position + 1);
+        // }
+        //
+        // let scriptsig_size_hex = hex::encode(&scriptsig_size_bytes);
+        let scriptsig_size_hex = compact_size_as_bytes(vin.scriptsig.len() / 2);
+        let scriptsig_size_hex = hex::encode(&scriptsig_size_hex);
         serialized_tx.push_str(&scriptsig_size_hex);
 
         // Now push scriptsig itself
@@ -144,14 +146,8 @@ pub fn serialize_tx(transaction: &Transaction) -> String {
         serialized_tx.push_str(&hex::encode(value));
 
         // Now push the scriptpubkey cpmpact size
-
-        // Just like above I had to remove the trailing zeros}
-        let scriptpubkey_size = vout.scriptpubkey.len() / 2;
-        let mut scriptpubkey_size_bytes = (scriptpubkey_size as u64).to_le_bytes().to_vec();
-        if let Some(last_non_zero_position) = scriptpubkey_size_bytes.iter().rposition(|&x| x != 0) {
-            scriptpubkey_size_bytes.truncate(last_non_zero_position + 1);
-        }
-        let scriptpubkey_size_hex = hex::encode(&scriptpubkey_size_bytes);
+        let scriptpubkey_size_hex = compact_size_as_bytes(vout.scriptpubkey.len() / 2);
+        let scriptpubkey_size_hex = hex::encode(&scriptpubkey_size_hex);
         serialized_tx.push_str(&scriptpubkey_size_hex);
         serialized_tx.push_str(&vout.scriptpubkey);
     }
@@ -186,7 +182,6 @@ pub fn serialized_segwit_tx(transaction: &Transaction) -> String {
 
     for vin in &transaction.vin {
         // Serialize txid and push
-        //serialized_tx.push_str(&vin.txid);
         let txid_bytes = hex::decode(&vin.txid).unwrap();
         let reversed_txid= reverse_bytes(txid_bytes);
         serialized_tx.push_str(&reversed_txid);
