@@ -31,7 +31,7 @@ pub fn create_coinbase_tx(total_tx_fee: u64, witness_root_vec: Vec<String>) -> T
     let txid= "0000000000000000000000000000000000000000000000000000000000000000".to_string();
     // input count is 1 byte 01
     coinbase_tx.vin.push(Vin {
-        txid,
+        txid: txid.clone(),
         vout: 0xffffffff,
         prevout: Prevout {
             scriptpubkey: "".to_string(),
@@ -42,7 +42,7 @@ pub fn create_coinbase_tx(total_tx_fee: u64, witness_root_vec: Vec<String>) -> T
         },
         scriptsig: block_scriptsig,
         scriptsig_asm: "OP_PUSHBYTES_3 837122".to_string(),
-        witness: Some(vec![txid]),
+        witness: Some(vec![txid.clone()]),
         is_coinbase: true,
         sequence: 0xffffffff,
     });
