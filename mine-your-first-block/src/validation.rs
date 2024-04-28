@@ -73,7 +73,7 @@ pub fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProce
                 }
 
                 // Remove dust transactions
-                let min_relay_fee_per_byte: u64 = 5; // 3 satoshis per byte  could go up or down 1-5
+                let min_relay_fee_per_byte: u64 = 1; // 3 satoshis per byte  could go up or down 1-5
                 remove_dust_transactions(&mut transaction, min_relay_fee_per_byte);
 
                 // Check for double spending
