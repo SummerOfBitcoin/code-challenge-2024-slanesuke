@@ -59,15 +59,12 @@ pub fn deserialize_tx(filename: &str) -> Transaction {
     tx
 }
 
-
 //  Serialization functions
 /// This function serializes the block header because it's a bit different from a reg tx
 pub fn serialize_block_header(block_header: &BlockHeader) -> Vec<u8> {
     let mut buffer = vec![0u8; 80];  // 80 bytes for Bitcoin block header
-
     {
         let mut writer = &mut buffer[..];
-
         // Write each field directly into the buffer at the correct position
         writer.write_u32::<LittleEndian>(block_header.version).unwrap();
         writer.write_all(&hex::decode(&block_header.prev_block_hash).unwrap()).unwrap();
@@ -89,7 +86,6 @@ pub fn serialize_tx(transaction: &Transaction) -> String {
     let version = transaction.version.to_le_bytes();
     serialized_tx.push_str(&hex::encode(version));
 
-
     // Serialize vin count
     let vin_count = transaction.vin.len() as u64;
     serialized_tx.push_str(&format!("{:02x}", vin_count));
@@ -97,29 +93,16 @@ pub fn serialize_tx(transaction: &Transaction) -> String {
     // Sereialize txid
     for vin in &transaction.vin {
 
-        // I believe the txid needs to be in reversed byte order
+        // Reverse the byte order of txid and push
         let txid_bytes = hex::decode(&vin.txid).unwrap();
-        let reversed_txid_bytes: Vec<u8> = txid_bytes.into_iter().rev().collect();
-        let reversed_txid = hex::encode(reversed_txid_bytes);
+        let reversed_txid = reverse_bytes(txid_bytes);
         serialized_tx.push_str(&reversed_txid);
 
         // Serialize vout
         let vout = &vin.vout.to_le_bytes();
         serialized_tx.push_str(&hex::encode(vout));
 
-        // // Serialize scriptSig size I kept getting trailing zeros after my compactsize hex
-        // let scriptsig_size = vin.scriptsig.len() / 2;
-        //
-        // // IMPLEMENT THE COMPACT SIZE FUNCTION (this was first draft)
-        // // So I had to do this to remove the trailing zeros
-        // // It basically converts the u64 to bytes then to a vec then removes the trailing zeros
-        // let mut scriptsig_size_bytes = (scriptsig_size as u64).to_le_bytes().to_vec();
-        //
-        // if let Some(last_non_zero_position) = scriptsig_size_bytes.iter().rposition(|&x| x != 0) {
-        //     scriptsig_size_bytes.truncate(last_non_zero_position + 1);
-        // }
-        //
-        // let scriptsig_size_hex = hex::encode(&scriptsig_size_bytes);
+        // Get the scriptsig compact size and push it
         let scriptsig_size_hex = compact_size_as_bytes(vin.scriptsig.len() / 2);
         let scriptsig_size_hex = hex::encode(&scriptsig_size_hex);
         serialized_tx.push_str(&scriptsig_size_hex);
