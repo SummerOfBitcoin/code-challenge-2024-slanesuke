@@ -576,7 +576,7 @@ pub fn calculate_transaction_weight(tx: &Transaction) -> u64 {
     let total_size = serialized_segwit_tx(tx).len() as u64;
 
     // Calculate weight of the transaction
-    let tx_weight = base_size * 2 + total_size;
+    let tx_weight = base_size * 1.8 as u64 + total_size;
 
     tx_weight   // Return the weight of the transaction
 }
