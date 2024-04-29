@@ -381,6 +381,47 @@ pub fn double_sha256(input: Vec<u8>) -> [u8; 32] {
     second_hash.try_into().expect("Expected a Vec<u8> of length 32")
 }
 
+/// This function will get the tx ready for signing by removing the scriptsig and adding the
+/// scriptpubkey to the scriptsig field and adding the sighash to the transaction
+pub fn get_tx_readyfor_signing_legacy(transaction : &mut Transaction) -> Transaction {
+    // Get the signature and public key from the scriptsig
+    let scriptsig = &transaction.vin[0].scriptsig;
+    let (signature, _pubkey) = get_signature_and_publickey_from_scriptsig(scriptsig).unwrap();
+
+    // removing the scriptsig for each vin and adding the scriptpubkey to the scriptsig field
+    for vin in transaction.vin.iter_mut() {
+        vin.scriptsig = String::new();
+        vin.scriptsig = vin.prevout.scriptpubkey.clone();
+    }
+
+    // Using the last two bytes of the signature as the sighash type for now
+    let sighash_type = &signature[signature.len()-2..];
+
+    // Hard coding the sighash type for now
+    let sighash = format!("{}000000", sighash_type);
+
+    // Adding the sighash to the transaction
+    // It turns a string into a u32
+    transaction.sighash = Some(sighash);
+
+    // Emptying the scriptsig fields for each input
+    for vin in transaction.vin.iter_mut() {
+        // Empty
+        vin.scriptsig = String::new();
+
+        // Copy the scriptpubkey to the scriptsig field
+        vin.scriptsig  = vin.prevout.scriptpubkey.clone();
+    }
+
+    // Return the tx
+    Transaction {
+        version: transaction.version,
+        locktime: transaction.locktime,
+        vin: transaction.vin.clone(),
+        vout: transaction.vout.clone(),
+        sighash: transaction.sighash.clone(),
+    }
+}
 
 // Constructing the message that is needed to validate  singnatue
 /// Function to get segwit message
@@ -520,49 +561,8 @@ pub fn get_signature_and_publickey_from_scriptsig(scriptsig: &str) -> Result<(St
     Ok((sig_and_pubkey_vec[0].clone(), sig_and_pubkey_vec[1].clone()))
 }
 
-/// This function will get the tx ready for signing by removing the scriptsig and adding the
-/// scriptpubkey to the scriptsig field and adding the sighash to the transaction
-pub fn get_tx_readyfor_signing_legacy(transaction : &mut Transaction) -> Transaction {
-    // Get the signature and public key from the scriptsig
-    let scriptsig = &transaction.vin[0].scriptsig;
-    let (signature, _pubkey) = get_signature_and_publickey_from_scriptsig(scriptsig).unwrap();
 
-    // removing the scriptsig for each vin and adding the scriptpubkey to the scriptsig field
-    for vin in transaction.vin.iter_mut() {
-        vin.scriptsig = String::new();
-        vin.scriptsig = vin.prevout.scriptpubkey.clone();
-    }
-
-    // Using the last two bytes of the signature as the sighash type for now
-    let sighash_type = &signature[signature.len()-2..];
-
-    // Hard coding the sighash type for now
-    let sighash = format!("{}000000", sighash_type);
-
-    // Adding the sighash to the transaction
-    // It turns a string into a u32
-    transaction.sighash = Some(sighash);
-
-    // Emptying the scriptsig fields for each input
-    for vin in transaction.vin.iter_mut() {
-        // Empty
-        vin.scriptsig = String::new();
-
-        // Copy the scriptpubkey to the scriptsig field
-        vin.scriptsig  = vin.prevout.scriptpubkey.clone();
-    }
-
-    // Return the tx
-    Transaction {
-        version: transaction.version,
-        locktime: transaction.locktime,
-        vin: transaction.vin.clone(),
-        vout: transaction.vout.clone(),
-        sighash: transaction.sighash.clone(),
-    }
-}
-
-/// This function will
+/// This function will reverse the bytes and return a hex string
 pub fn reverse_bytes(mut bytes: Vec<u8>) -> String {
     bytes.reverse();
     hex::encode(bytes)
