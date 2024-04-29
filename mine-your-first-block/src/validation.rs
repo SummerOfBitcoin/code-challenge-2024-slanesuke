@@ -1,4 +1,4 @@
-use crate::transactions::{Transaction, Vout,  TransactionForProcessing};
+use crate::transactions::{Transaction,  TransactionForProcessing};
 use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
 extern crate secp256k1;
@@ -389,6 +389,7 @@ pub fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, S
 }
 
 
+// Helper functions to weed out bad transactions.
 /// Function to get the tx amount so
 pub fn verify_tx_fee(transaction: &Transaction) -> u64 {
     let total_input_amount: u64 = transaction.vin.iter()
