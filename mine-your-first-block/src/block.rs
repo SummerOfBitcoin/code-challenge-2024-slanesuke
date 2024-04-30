@@ -4,7 +4,6 @@ use crate::transactions::{BlockHeader, Prevout, Transaction, Vin, Vout};
 use crate::utils::{double_sha256, get_merkle_root, reverse_bytes};
 
 /// This function will return the coinbase transaction
-///
 pub fn create_coinbase_tx(total_tx_fee: u64, witness_root_vec: Vec<String>) -> Transaction {
     // The function has total fees and a vec of wtxids as the input and returns a coinbase transaction
     // Create a coinbase transaction and return it
@@ -25,10 +24,10 @@ pub fn create_coinbase_tx(total_tx_fee: u64, witness_root_vec: Vec<String>) -> T
     // OP_PUSHBYTES_3 + block height. block_height = 837122
     let block_scriptsig = "03837122".to_string();
 
-    // version is 4 bytes lil endian 00000000
+    // Version is 4 bytes lil endian 00000000
     coinbase_tx.version = 0;
 
-    // the txid variable is the witness data also
+    // The txid variable is the witness data also
     let txid= "0000000000000000000000000000000000000000000000000000000000000000".to_string();
 
     // Initialize the input for the coinbase transaction
@@ -94,7 +93,7 @@ pub fn construct_block_header(nonce: u32, merkle_root: String) -> BlockHeader {
         prev_block_hash: "".to_string(),
         merkle_root: merkle_root.to_string(),
         timestamp: 0,
-        bits: 0x1f00ffff, // Hard coded 'bits' value
+        bits: 0x1f00ffff, // Hard coded bits value for now
         nonce: 0,
     };
 
@@ -111,7 +110,7 @@ pub fn construct_block_header(nonce: u32, merkle_root: String) -> BlockHeader {
     block_header.timestamp = timestamp as u32;
 
     // The nonce value is incremented +=1 until the hash meets the target
-    block_header.nonce = nonce; // pass in a nonce from main
+    block_header.nonce = nonce;
 
     // Return the block header
     block_header
