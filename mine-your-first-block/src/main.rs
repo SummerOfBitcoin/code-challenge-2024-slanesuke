@@ -2,7 +2,6 @@ mod transactions;
 mod validation;
 mod utils;
 mod block;
-
 use transactions::*;
 use validation::*;
 use utils::*;
