@@ -101,6 +101,7 @@ fn main() {
 
         // Check if the hash meets the target
         if hash_meets_difficulty_target(&block_hash) {
+            // If so, write the block to a file
             write_block_to_file(&serialized_block_header, &cd_tx_bytes, &block_txs);
             println!("Success, the block met the target difficulty!");
             break;
