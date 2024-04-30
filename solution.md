@@ -23,119 +23,132 @@ With valid transactions in the **TransactionForProcessing** vector, the script c
 The next major component is the **construct_block_header** function, which is vital as it requires the merkle root to create a valid block header. The success of mining relies on generating a block hash that meets or is lower than the difficulty target. This is continually checked in the mining loop within the **main**, where each iteration involves incrementing the nonce (by 1), hashing the block header, and comparing it. If the block hash meets the difficulty target, verified by the **hash_meets_difficulty_target** function, the block is successfully mined, adding the serialized block header, coinbase transaction, and valid txids to the block!
 
 ## Implementation details
-I've described how my script works and now I want to go a bit deeper into key concepts, components, and important functions that went into the creation of my valid block. I have a few modules, so I'll go through each one at a time explaining these components.
-
+Having outlined the general workings of my script, I'll now dive deeper into the key concepts, components, and critical functions that were instrumental in constructing a valid block. The script comprises several modules, each with distinct roles and responsibilities. In the following sections, I will analyze each module, explaining the specific components and their contributions to the project's success.
 ### transaction.rs
-I mentioned the transaction.rs module and how the Transaction struct worked but I skipped over the BlockHeader struct. This struct creates a BlockHeader object with the data passed into it from the construct_block_header() function. It helps me keep all the data in one place before serializing it all before adding it to the block.
-
+In my previous sections, talked about the **transaction.rs** module and explained the operation of the **Transaction** struct. However, I missed details about the **BlockHeader** struct. This struct is pivotal in creating a BlockHeader object, which is populated with data supplied by the **construct_block_header** function. The primary role of this struct is to organize and maintain all relevant data in a cohesive structure before it undergoes serialization and integration into the block.
 ### utils.rs
-Next, I'll look into my utils.rs module. This module keeps all the utility functions that help me in many ways throughout the script.
-Starting from the top, I made my get_merkle_root() function. The merkle root function is necessary for creating the block because it's what I use to calculate my merkle and witness root. To make a merkle root you have to change the txids from little endian to big endian. I do this first in the get_merkle_root() function by mapping over each txid in the vector, decoding it from a hex string to bytes, reversing the bytes, and collecting it before pushing it into a 32-byte array. I then collect the byte arrays in a vector where I move them to the next operation in the function. If the merkle root has an odd number of txids (in bytes) I duplicate the last txid and push it into the vector. I'll then iterate over the vector in chunks of two, taking both byte arrays, pushing them into a SHA256 hash function (concatenating them together) then hashing them. This process continues until there is one 32-byte array left. I'll encode the array of bytes into a hex string and return it. I use this function twice. Once in the main.rs where I collect all the txids, create the blocks merkle root, then pass it into the construct_block_header() function, then in the create_coinbase_tx() function where I pass in a vector of wtxids and call the merkle root function there to construct the witness root.
+Next, I will go into the **utils.rs** module. This module houses a collection of utility functions that play a crucial role in supporting various operations throughout the script.
+
+Starting from the top, the **get_merkle_root** function is foundational in constructing the block as it calculates both the merkle and witness roots. The process begins by converting the txids from little endian to big endian format. This is achieved by mapping over each txid in the vector, decoding it from a hex string to bytes, reversing these bytes, and collecting them into a 32-byte array.
+These byte arrays are then collected in a vector, which is prepared for the next phase of the function. If the vector has an odd number of txids, the last txid is duplicated to ensure an even number for processing. The function proceeds by iterating over the vector in chunks of two, where both byte arrays are concatenated and then fed into a SHA256 hash function. This hashing process is repeated until only one 32-byte array remains.
+Finally, this array is encoded back into a hex string and returned as the merkle root. This critical function is utilized twice within the script: once in **main.rs** to gather all txids, create the block's merkle root, and input it into the **construct_block_header** function and again in the **create_coinbase_tx** function, where a vector of wtxids is passed to construct the witness root.
 ##### Pseudo code:
 -	Initialize a mutable variable be_txid (big endian txid) as an empty vector to store the txids.
 -	Iterate over each txid in the input vector txid.
-     o	For each txid, decode it from hex to bytes.
-     o	Reverse the bytes to convert them from little-endian to big-endian.
-     o	Copy the reversed bytes into a new array of size 32 and add it to be_txid.
+     -	For each txid, decode it from hex to bytes.
+     -	Reverse the bytes to convert them from little-endian to big-endian.
+     -	Copy the reversed bytes into a new array of size 32 and add it to be_txid.
 -	While the length of the be_txid vector is greater than 1:
-     o	If the length of be_txid is odd, duplicate the last element and add it to the end of the vector.
-     o	Split be_txid into chunks of 2 elements each.
-     o	For each pair of elements:
-     o	Initialize a new SHA256 hasher.
-     o	Update the hasher with the first and the second elements concatenating them.
-     o	Double SHA256 the hasher
-     o	Replace the pair in be_txid with the second hash.
+     -	If the length of be_txid is odd, duplicate the last element and add it to the end of the vector.
+     -	Split be_txid into chunks of 2 elements each.
+     -	For each pair of elements:
+     -	Initialize a new SHA256 hasher.
+     -	Update the hasher with the first and the second elements concatenating them.
+     -	Double SHA256 the hasher
+     -	Replace the pair in be_txid with the second hash.
 -	The first element of be_txid is the Merkle root in big-endian format. Reverse the bytes.
 -	Encode the Merkle root in hexadecimal and return it as the result.
 
-The next few key functions are my transaction serialization functions. These are necessary for block construction because they provide me the serialized data that when hashed gives me the txid or wtxid (depending on the function). So, for legacy transactions, my serialize_tx() function starts by converting the version to little endian bytes before I encode it back into a hex and push it to my serialized transaction string. The input (vin) count is pushed next as 1 byte. Next, for each input, I loop over and reverse the txid and push, convert the vout to little endian and push, calculate the scriptsigs compact size and push it as a byte, then followed by the actual scriptsig, and finally finish with converting the sequence to little endian and push before exiting the for loop. I move on to the outputs (vout) and run a similar process. Push the little-endian output count, then in a for loop for each output, I push the little-endian value (in sats), the scriptpubkeys compact size followed by the actual scriptpubkey. Outside of the loop, I push the locktime in little-endian and if there is a sighash type, I push it onto the end of the serialized transaction. A note to add, when I say reverse to little endian and push or convert to little endian and push, I mean reverse its byte order to little endian, convert it to a hexadecimal then push to the serialized_tx string.
+The next few key functions are my transaction serialization functions. These are essential for block construction as they provide the serialized data that, when hashed, yields the txid or witness wtxid, depending on the function used. For legacy transactions, my **serialize_tx** function begins by converting the version number into little endian bytes, encoding it back into a hex string, and appending it to my serialized transaction string. The input (vin) count is added next as a single byte.
+For each input, I loop through the following steps: reverse the txid and append it, convert the vout to little endian and append it, calculate the scriptsig's compact size and append it as a byte, followed by the actual scriptsig, and conclude with converting the sequence to little endian and appending it before exiting the loop.
+Moving on to the outputs (vout), I follow a similar process. I append the little endian output count, and for each output, I append the little endian value (in sats), the scriptubkey's compact size followed by the actual scriptpubkey. Outside of this loop, I append the locktime in little endian and, if present, the sighash type at the end of the serialized transaction.
+It's important to note that when I mention reversing to little endian and appending or converting to little endian and appending, I am referring to reversing its byte order to little endian, converting it to a hex, then appending it to the serialized_tx string.
 ##### Pseudo code:
 -	Initialize an empty string serialized_tx to store the serialized transaction.
 -	Convert the transaction version to little endian bytes and encode it to hex. Append this to serialized_tx.
 -	Get the count of transaction inputs (vin) and append its hex.
 -	For each transaction input (vin) in the transaction:
-     o	Decode the txid from hex to bytes, reverse the bytes to get the txid in big-endian, and append its hex.
-     o	Convert the output index (vout) to little endian bytes and append its hex.
-     o	Calculate the compact size of the unlocking script (scriptsig), convert it to hex, and append.
-     o	Append the scriptsig.
-     o	Convert the sequence number to little endian bytes and append its hex representation to serialized_tx.
+     -	Decode the txid from hex to bytes, reverse the bytes to get the txid in big endian, and append its hex.
+     -	Convert the output index (vout) to little endian bytes and append its hex.
+     -	Calculate the compact size of the unlocking script (scriptsig), convert it to hex, and append.
+     -	Append the scriptsig.
+     -	Convert the sequence number to little endian bytes and append its hex representation to serialized_tx.
 -	Get the count of transaction outputs (vout) and append its hex.
 -	For each transaction output (vout) in the transaction:
-     o	Convert the output value to little endian bytes and append its hex.
-     o	Calculate the compact size of the locking script (scriptpubkey), convert it to hex.
-     o	Append the scriptpubkey itself to serialized_tx.
+     -	Convert the output value to little endian bytes and append its hex.
+     -	Calculate the compact size of the locking script (scriptpubkey), convert it to hex.
+     -	Append the scriptpubkey itself to serialized_tx.
 -	Convert the locktime to little endian bytes and append its hex.
 -	If the transaction has a sighash, append it to serialized_tx.
 -	Return serialized_tx.
 
-The process is the same for my serialized_segwit_tx() function except I push 00 and 01, after the version number. These values are the marker and flag. They're used to identify the segwit transactions. Segwit transactions hold their signature and public keys in the witness so if the input is a p2wpkh transaction the scriptsig is 00 otherwise the scripting is pushed to the serialized string like in legacy transactions. I also have the witness reserve value pushed to the serialized transaction function if it's a coinbase transaction (this is only for the coinbase tx) a 01 stack value is pushed, then 20 compact size is pushed before the reserve value. These changes are necessary to serialize a segwit transaction to get a valid transaction ID.
+The process for my **serialize_segwit_tx** function is similar to **serialize_tx**, but with a few distinctions to accommodate segwit transactions. After appending the version number, I push 00 and 01, which serve as the marker and flag. These values are crucial for identifying segwit transactions, which store their signature and public keys in the witness data. If the input belongs to a p2wpkh transaction, the scriptsig is 00. Otherwise, the scriptsig is appended to the serialized string as in legacy transactions.
+Also, if the transaction is a coinbase transaction, the witness reserve value is incorporated into the serialization process. Specifically, a 01 stack value is pushed, followed by 20 as the compact size, and then the reserve value itself. These changes are necessary for serializing a segwit transaction to accurately generate a valid txid
 ##### Pseudo code:
 -	Initialize an empty string serialized_tx to store the serialized transaction.
 -	Convert the transaction version to little endian bytes and encode it to hex and append (Same as the previous function)
 -	If the first transaction input (vin) is a coinbase transaction, append 0001 to serialized_tx.
 -	Get the count of transaction inputs (vin) and append its hex. (Same as the previous function)
 -	For each transaction input (vin) in the transaction, do the following:
-     o	Decode the txid from hex to bytes, reverse the bytes to get the txid in big-endian, and append its hex. (Same as the previous function)
-     o	Convert the output index (vout) to little endian bytes and append the hex. (Same as the previous function)
-     o	If the unlocking script (scriptsig) is empty, append 00 to serialized_tx. Otherwise, calculate the compact size of the scriptsig, convert it to hex, and append it to serialized_tx, followed by the scriptsig itself. (Same as the previous function)
-     o	Convert the sequence number to little endian bytes and append its hex. (Same as the previous function)
+     -	Decode the txid from hex to bytes, reverse the bytes to get the txid in big-endian, and append its hex. (Same as the previous function)
+     -	Convert the output index (vout) to little endian bytes and append the hex. (Same as the previous function)
+     -	If the unlocking script (scriptsig) is empty, append 00 to serialized_tx. Otherwise, calculate the compact size of the scriptsig, convert it to hex, and append it to serialized_tx, followed by the scriptsig itself. (Same as the previous function)
+     -	Convert the sequence number to little endian bytes and append its hex. (Same as the previous function)
 -	Get the count of transaction outputs (vout) and append its hex. (Same as the previous function)
 -	For each transaction output (vout) in the transaction, do the same as previous function.
 -	For each transaction input (vin) in the transaction, if it has a witness field that equals "0000000000000000000000000000000000000000000000000000000000000000", append 01, 20, and the witness field to serialized_tx.
 -	Convert the locktime to little endian bytes and append its hex. (Same as the previous function)
 -	Return serialized_tx.
 
-Serializing a segwit transaction to get a wtxid is also a bit different. In serialized_segwit_wtx() everything is again the same as above. However, the witness data is being serialized after the outputs are. For each transaction, you first get the number of stack items with the compact size function and push in hexadecimal format. Next, for each witness item in the witness vector, you get its compact size and push, then push the actual value in the current witness index. That completes the transaction serialization functions. They all have a lot of similarities but the segwit transactions differ a bit when getting their txid and wtxid!
+Serializing a segwit transaction to derive a wtxid follows a slightly modified procedure in the **serialize_segwit_wtx** function. While the initial steps mirror those described above, the serialization of witness data occurs after the outputs. For each transaction, the number of stack items is determined using the **compact size* function and pushed as a hex. Afterward, for each item in the witness vector, its compact size is calculated and appended, followed by the actual value at the current witness index.
+These transaction serialization functions share many similarities, yet the methods for obtaining the txid and wtxid in segwit transactions introduce important differences.
 ##### Pseudo code:
 Everything is the same as the previous transaction except:
 -	Append 00 and 01 (after version) to serialized_tx to represent the marker and flag of a segwit transaction.
 -	For each transaction input (vin) in the transaction everything is again the same as the previous function but:
-     o	Append 00 to serialized_tx to represent an empty scriptsig.
+     -	Append 00 to serialized_tx to represent an empty scriptsig.
 -	After the serialized outputs (vout), for each transaction input (vin) in the transaction, if it has a witness field:
-     o	Calculate the compact size of the witness field, convert it to hex then append.
-     o	For each item in the witness field, decode it from hex to bytes, calculate its compact size, convert it back to hex, and append it to serialized_tx, followed by the item itself.
+     -	Calculate the compact size of the witness field, convert it to hex then append.
+     -	For each item in the witness field, decode it from hex to bytes, calculate its compact size, convert it back to hex, and append it to serialized_tx, followed by the item itself.
 -	Return serialized_tx.
 
-The next key component, I want to talk about is preparing the transactions for signing! I'll start with a legacy (p2pkh) function and then move to the segwit function. In the get_tx_readyfor_signing_legacy() function I construct the transaction in a specific way and then use my normal serialize_tx() function to serialize it for the message. This is just a bit different from my get_segwit_message() function where I return the serialized message itself. The get_tx_readyfor_signing_legacy() function starts by extracting the signature and public key from the scriptsig of the first input of the transaction. Then, for each input in the transaction, it clears the scriptsig and replaces it with the scriptpubkey from the previous output (prevout). This is because, in the process of signing a legacy transaction, the scriptsig of the input being signed is replaced with the scriptpubkey of the output being spent! The function then pulls the last two bytes of the signature, which are the sighash type, and adds it to the transaction. After that, the function iterates over each input in the transaction again, clearing the scriptsig and replacing it with the scriptpubkey from the previous output. Finally, the function returns a new Transaction object with the updated version, locktime, inputs, outputs, and sighash type!
+The next important component I want to talk about involves preparing transactions for signing. I'll start with the legacy process and then describe the segwit approach. The **get_tx_ready_for_signing_legacy** function constructs the transaction in a specific manner before using the **serialize_tx** function to serialize it for the message. This differs slightly from the **get_segwit_message** function, which directly returns the serialized message.
+For a legacy transaction, **get_tx_ready_for_signing_legacy** begins by extracting the signature and public key from the scriptsig of the first input. Next, for each input in the transaction, it clears the existing scriptsig and replaces it with the scriptsubsey from the output being spent (prevout). This replacement is essential because, during the signing process, the scriptsig of the input being signed is substituted with the scriptsubkey of the corresponding output. After removing the last two bytes of the signature (the sighash type), they are appended to the transaction.
+The function then iterates over each input again, performing the same replacement of scriptsig with scriptpubkey. Ultimately, it returns a new **Transaction** object that includes the updated elements: version, locktime, inputs, outputs, and sighash type!
 ##### Pseudo code:
 -	Get the scriptsig of the first transaction input (vin).
--	Extract the signature and public key from the scriptsig using the get_signature_and_publickey_from_scriptsig() function.
+-	Extract the signature and public key from the scriptsig using the get_signature_and_publickey_from_scriptsig function.
 -	For each transaction input (vin) in the transaction, do the following:
-     o	Clear the scriptsig.
-     o	Copy the scriptpubkey of the previous output (prevout) to the scriptsig.
+     -	Clear the scriptsig.
+     -	Copy the scriptpubkey of the previous output (prevout) to the scriptsig.
 -	Extract the last two bytes of the signature to use as the sighash type.
 -	Format the sighash type by appending 000000 to it.
 -	Set the sighash of the transaction to the formatted sighash type.
 -	For each transaction input (vin) in the transaction:
-     o	Clear the scriptsig.
-     o	Copy the scriptpubkey of the previous output (prevout) to the scriptsig.
+     -	Clear the scriptsig.
+     -	Copy the scriptpubkey of the previous output (prevout) to the scriptsig.
 -	Return a new transaction.
 
-This next function is a lot different than the previous legacy function. The get_segwit_tx_message() function is used to construct the message that is needed to validate a signature in a segwit transaction. It's a lot different than the legacy message construction. I created this function to return a string of the pre-image (or message). You start by pushing the 4-byte little endian version number. Next, for each input, you concatenate the little-endian txid and vout then push them to a variable named input_bytes, then do the same thing for sequence and a sequence_bytes variable. After the loop breaks, the input_hash variable with the txid+vouts and sequence_bytes variable is hashed and pushed to the preimage string. The next step is to serialize the txid+vout of the input we're checking the signature on, hashing like before, and pushing to the preimage. Afterward, I formatted the scriptcode by passing in the public key hash (from p2wpkh_script_validation()) into the function so I could format it into a specific structure that looks like this 1976a914{publickeyhash}88ac afterwards it pushed to preimage. Up next, we convert the amount to little-endian and sequence then push them one after the other to the preimage variable. For each output, I made an output_bytes variable to push data in so I could hash it afterward. The amount in sats is pushed as little-endian first, the scriptpubkey_size compact size, then scriptpubkey itself is pushed. Once all the output data is pushed it is double-hashed and pushed to the preimage variable (in hex). The last couple of values needed for the preimage are the locktime and sighash and of course, they're byte order is reversed and encoded in hex! Finally, the segwit preimage for signature validation is created and can be sent to the p2wpkh script validation to verify signatures.
+The **get_segwit_tx_message** function plays a crucial role in constructing the message required to validate a signature in a segwit transaction, differing significantly from the legacy message construction. This function is designed to assemble the pre-image (or message) needed for signature validation.
+The process starts by appending the 4-byte little endian version number to the message. For each input, the txid and output index (vout), both in little endian, are concatenated along with the sequence number, and then stored in variables named input_bytes and sequence_bytes, respectively.
+After iterating through all inputs, the input_hash variable, which combines txid+vouts and sequence_bytes, is hashed and added to the pre-image string. Next, the function serializes and hashes the txid+vout of the input currently undergoing signature verification, adding this to the pre-image as well.
+The script code is formatted by incorporating the public key hash (retrieved from **p2wpkh_script_validation**) into a predefined structure: * *1976a914{publickeyhash}88ac* *. This is then appended to the pre-image. Next, the transaction amount and sequence are converted to little endian and pushed into the pre-image.
+For the outputs, an output_bytes variable is used to collect the data for each output, including the little endian amount, the compact size of the scriptpubkey, and the scriptpubkey itself. After all output data is compiled, it undergoes double hashing and is added to the pre-image in hex format.
+Finally, the locktime and sighash type, both reversed to little endian and encoded in hex, are appended to complete the segwit pre-image. This complicated construction of the pre-image is then ready to be used in **p2wpkh_script_validation** for signature verification.
 ##### Pseudo code:
 -	Clone the transaction to a new variable tx.
--	Convert the transaction version to little-endian bytes and encode it to hex. Store this in version.
+-	Convert the transaction version to littleendian bytes and encode it to hex. Store this in version.
 -	Initialize two empty byte vectors input_bytes and sequences_bytes.
 -	For each transaction input (vin) in the transaction:
-     o	Decode the txid from hex to bytes, reverse the bytes to get the txid in big-endian, and append these bytes to input_bytes.
-     o	Convert the output index (vout) to little-endian bytes and append to input_bytes.
-     o	Convert the sequence number to little-endian bytes and append to sequences_bytes.
+     -	Decode the txid from hex to bytes, reverse the bytes to get the txid in big endian, and append these bytes to input_bytes.
+     -	Convert the output index (vout) to little endian bytes and append to input_bytes.
+     -	Convert the sequence number to little endian bytes and append to sequences_bytes.
 -	Double SHA256 hash the input_bytes and sequences_bytes. Store these in input_hash and sequences_hash.
 -	Get the transaction input (vin) at the specified index from vin_index.
--	Decode the txid of this input from hex to bytes, reverse the bytes to get the txid in big-endian, and encode this to hex. Store in. txid.
+-	Decode the txid of this input from hex to bytes, reverse the bytes to get the txid in big endian, and encode this to hex. Store in. txid.
 -	Convert the output index (vout) of this input to little endian bytes and encode this to hex. Store in vout.
 -	Format txid and vout into a string input.
 -	Format the public key hash pubkey_hash into a script code scriptcode.
--	Get the value of the previous output (prevout) of this input, convert it to little-endian bytes, and encode this to hex. Store in amount_le.
--	Convert the sequence number of this input to little-endian bytes and encode this to hex. Store in sequence.
+-	Get the value of the previous output (prevout) of this input, convert it to little endian bytes, and encode this to hex. Store in amount_le.
+-	Convert the sequence number of this input to little endian bytes and encode this to hex. Store in sequence.
 -	Initialize an empty byte vector output_bytes.
 -	For each transaction output (vout) in the transaction:
-     o	Convert the output value to little-endian bytes and append to output_bytes.
-     o	Calculate the compact size of the locking script (scriptpubkey), convert it to bytes, and append to output_bytes.
-     o	Decode the locking script (scriptpubkey) from hex to bytes and append to output_bytes.
+     -	Convert the output value to little endian bytes and append to output_bytes.
+     -	Calculate the compact size of the locking script (scriptpubkey), convert it to bytes, and append to output_bytes.
+     -	Decode the locking script (scriptpubkey) from hex to bytes and append to output_bytes.
 -	Double SHA256 hash the output_bytes and store this in output_hash.
--	Convert the locktime of the transaction to little-endian bytes and encode this to hex. Store in locktime.
--	Convert the sighash type sighash_type to a 32-bit integer, convert this to little-endian bytes, and encode to hex. Store in formatted_sighash.
+-	Convert the locktime of the transaction to little endian bytes and encode this to hex. Store in locktime.
+-	Convert the sighash type sighash_type to a 32-bit integer, convert this to little endian bytes, and encode to hex. Store in formatted_sighash.
 -	Format all the variables into one preimage string (concatenating them)
 -	Return preimage.
 
