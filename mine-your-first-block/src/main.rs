@@ -9,6 +9,7 @@ use utils::*;
 use block::*;
 use itertools::Itertools;
 
+/// The main driver function that mines the block
 fn main() {
     // Path to the mempool folder
     let mempool_path = "../mempool";
@@ -19,7 +20,8 @@ fn main() {
     // Get the valid txs from the mempool
     let valid_txs = process_mempool(mempool_path).unwrap();
 
-    // Initializing block weight
+    // Initializing block weight and fees
+    // initializing vector to store the transactions
     let mut block_txs: Vec<TransactionForProcessing> = Vec::new();
     let mut total_weight = 0u64;
     let max_block_weight = 4000000u64;
@@ -30,25 +32,27 @@ fn main() {
         .sorted_by(|a, b| b.fee.cmp(&a.fee))
         .collect();
 
-    // Select transactions to include in the block based on sorted order
+    // Select transactions to include in the block based on sorted order and weight
     for tx in sorted_valid_txs {
         let tx_weight = calculate_transaction_weight(&tx.transaction);
         if total_weight + tx_weight > max_block_weight {
             break;  // Stop if adding this transaction would exceed the max block weight
         }
-        block_txs.push(tx.clone());
-        total_weight += tx_weight;
-        total_fees += tx.fee;
+        block_txs.push(tx.clone()); // Add the transaction to the block
+        total_weight += tx_weight; // Add the weight to the total weight
+        total_fees += tx.fee; // Add the fee to the total fees
     }
 
-    // Sorting the transactions from fees in desencding order
+    // Sorting the transactions from fees in descending order (not really necessary)
     block_txs.sort_by(|a, b| b.fee.cmp(&a.fee));
 
     // Get the wtxids for the witness root
+    // Initialize the wtxids with the coinbase transaction
     let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
-    //let mut wtx_ids_for_witness_root: Vec<String> = vec![];
+
+    // Collect wtxids for witness root
     for tx in &block_txs {
-        // println!("TransactionID: {}, IS_P2WPKH: {}", tx.txid, tx.is_p2wpkh);
+        // If the transaction is p2wpkh, use the wtxid, otherwise use the txid
         if tx.is_p2wpkh {
             if let Some(ref wtxid) = tx.wtxid {
                 wtx_ids_for_witness_root.push(wtxid.clone());  // Collect wtxid if valid
@@ -68,9 +72,10 @@ fn main() {
     let serialized_cb_tx_for_txid = serialize_tx(&coinebase_tx_for_txid);
     let cb_txid_bytes = hex::decode(serialized_cb_tx_for_txid).unwrap();
     let coinbase_txid = double_sha256(cb_txid_bytes.clone());
-    let mut coinbase_txid_le = coinbase_txid.to_vec();
-    coinbase_txid_le.reverse();
-    let coinbase_txid = hex::encode(coinbase_txid_le);
+    // let mut coinbase_txid_le = coinbase_txid.to_vec();
+    // coinbase_txid_le.reverse();
+    // let coinbase_txid = hex::encode(coinbase_txid_le);
+    let coinbase_txid = reverse_bytes(coinbase_txid.to_vec());
 
     // Insert the coinbase transaction at the beginning of block_txs
     let coinbase_tx_for_processing = TransactionForProcessing {
