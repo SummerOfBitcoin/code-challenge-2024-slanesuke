@@ -11,10 +11,11 @@ use byteorder::{LittleEndian, WriteBytesExt};
 use crate::transactions::{BlockHeader, Transaction, TransactionForProcessing};
 
 
-/// This function calcluates the merkle root. It putes txids in natural byte order then
-/// Hashes the tree
+/// This function calculates the merkle root.
 pub fn get_merkle_root(txids: Vec<String>) -> String {
-    // Convert the txids to big endian to hash
+
+    // This will iterate over each txid, decode from hex and reverse the byte order and collect
+    // into a vector of 32 byte arrays for hashing
     let mut be_txid = txids.iter()
         .map(|txid| {
             let decoded_id = hex::decode(txid).unwrap();
@@ -27,11 +28,12 @@ pub fn get_merkle_root(txids: Vec<String>) -> String {
 
     // While the merkle tree has more than one txid
     while be_txid.len() > 1 {
+        // If the number of txids is odd, duplicate the last txid and push
         if be_txid.len() % 2 != 0 {
             be_txid.push(be_txid.last().unwrap().clone());
         }
 
-        // a bit confused so skipped the doublehash fn
+        // This will iterate over the txids (as bytes) in pairs of 2, concatenate them together and hash them
         be_txid = be_txid.chunks(2)
             .map(|pair| {
                 let mut hasher = Sha256::new();
@@ -43,7 +45,7 @@ pub fn get_merkle_root(txids: Vec<String>) -> String {
             }).collect()
     }
 
-    // merkle root in little endian
+    // Return the merkle root as a hex string
     let merkle_root = be_txid[0].to_vec();
     hex::encode(merkle_root)
 }
@@ -52,17 +54,23 @@ pub fn get_merkle_root(txids: Vec<String>) -> String {
 pub fn deserialize_tx(filename: &str) -> Transaction {
     //  Open the file of a tx
     let file = File::open(filename).unwrap();
+
+    // Create a buffer reader
     let reader = BufReader::new(file);
+    // Deserialize the tx from the buffer reader
     let tx: Transaction = serde_json::from_reader(reader).unwrap();
 
-    // return a transaction if the deserialization is successful
+    // Return a transaction if the deserialization is successful
     tx
 }
 
 //  Serialization functions
 /// This function serializes the block header because it's a bit different from a reg tx
 pub fn serialize_block_header(block_header: &BlockHeader) -> Vec<u8> {
-    let mut buffer = vec![0u8; 80];  // 80 bytes for Bitcoin block header
+    // Allocates 80 bytes for the block header
+    let mut buffer = vec![0u8; 80];
+
+    // Write the block header fields into the buffer
     {
         let mut writer = &mut buffer[..];
         // Write each field directly into the buffer at the correct position
@@ -73,6 +81,8 @@ pub fn serialize_block_header(block_header: &BlockHeader) -> Vec<u8> {
         writer.write_u32::<LittleEndian>(block_header.bits).unwrap();
         writer.write_u32::<LittleEndian>(block_header.nonce).unwrap();
     }
+
+    // Return the serialized block header
     buffer
 }
 
@@ -90,7 +100,7 @@ pub fn serialize_tx(transaction: &Transaction) -> String {
     let vin_count = transaction.vin.len() as u64;
     serialized_tx.push_str(&format!("{:02x}", vin_count));
 
-    // Sereialize txid
+    // Serialize txid
     for vin in &transaction.vin {
 
         // Reverse the byte order of txid and push
@@ -110,46 +120,50 @@ pub fn serialize_tx(transaction: &Transaction) -> String {
         // Now push scriptsig itself
         serialized_tx.push_str(&vin.scriptsig);
 
-        // push sequence
+        // Push sequence
         let sequence = &vin.sequence.to_le_bytes();
         let sequence_hex = hex::encode(sequence);
         serialized_tx.push_str(&sequence_hex);
     }
 
-    //  The output count has to be outside the vout loop because it's a single byte before it
-    // was inside
+    // Serialize vout count
     let vout_count = transaction.vout.len() as u64;
     serialized_tx.push_str(&format!("{:02x}", vout_count));
 
     // Now serialize vout count
     for vout in &transaction.vout {
 
-        // Next push the amount of satoshis
+        // Next push the amount of sats little endian
         let value = &vout.value.to_le_bytes();
         serialized_tx.push_str(&hex::encode(value));
 
-        // Now push the scriptpubkey cpmpact size
+        // Now push the scriptpubkey compact size then the scriptpubkey
         let scriptpubkey_size_hex = compact_size_as_bytes(vout.scriptpubkey.len() / 2);
         let scriptpubkey_size_hex = hex::encode(&scriptpubkey_size_hex);
         serialized_tx.push_str(&scriptpubkey_size_hex);
         serialized_tx.push_str(&vout.scriptpubkey);
     }
 
+    // Finally add the locktime
     let lock = &transaction.locktime.to_le_bytes();
     let lock_hex = hex::encode(lock);
     serialized_tx.push_str(&lock_hex);
 
+    // If the transaction has a sighash field, add it to the serialized tx
     if transaction.sighash.is_some() {
         serialized_tx.push_str(&<Option<String> as Clone>::clone(&transaction.sighash).unwrap());
     }
 
+    // Return the serialized tx
     serialized_tx
 }
 
 /// This function should serialize a transaction into a string of hex bytes for segwit transactions
 pub fn serialized_segwit_tx(transaction: &Transaction) -> String {
+    // Create a string to hold the serialized tx
     let mut serialized_tx = String::new();
 
+    // Serialize version field, little endian
     let version = transaction.version.to_le_bytes();
     serialized_tx.push_str(&hex::encode(version));
 
@@ -159,7 +173,7 @@ pub fn serialized_segwit_tx(transaction: &Transaction) -> String {
         serialized_tx.push_str("0001");
     }
 
-    // Serialize vin count and push the numb of inputs
+    // Serialize vin count and push the number of inputs
     let vin_count = transaction.vin.len() as u64;
     serialized_tx.push_str(&format!("{:02x}", vin_count));
 
@@ -178,6 +192,7 @@ pub fn serialized_segwit_tx(transaction: &Transaction) -> String {
         if vin.scriptsig.is_empty() {
             serialized_tx.push_str("00");
         } else {
+            // Otherwise
             // Serialize scriptSig size
             let scriptsig_size_hex = compact_size_as_bytes(vin.scriptsig.len() / 2);
             let scriptsig_size_hex = hex::encode(&scriptsig_size_hex);
@@ -186,31 +201,31 @@ pub fn serialized_segwit_tx(transaction: &Transaction) -> String {
             // Now push scriptsig itself
             serialized_tx.push_str(&vin.scriptsig);
         }
-
+        // Push sequence
         let sequence = &vin.sequence.to_le_bytes();
         let sequence_hex = hex::encode(sequence);
         serialized_tx.push_str(&sequence_hex);
     }
 
+    // Push the vout count
     let vout_count = transaction.vout.len() as u64;
     serialized_tx.push_str(&format!("{:02x}", vout_count));
 
     // Serialize vout count and push the numb of outputs
     for vout in &transaction.vout {
-        // Next push the amount of satoshis
+        // Next push the amount of sats little endian
         let value = &vout.value.to_le_bytes();
         serialized_tx.push_str(&hex::encode(value));
 
-        // Now push the scriptpubkey compact size
+        // Now push the scriptpubkey compact size and then the scriptpubkey
         let scriptpubkey_size_hex = compact_size_as_bytes(vout.scriptpubkey.len() / 2);
         let scriptpubkey_size_hex = hex::encode(&scriptpubkey_size_hex);
         serialized_tx.push_str(&scriptpubkey_size_hex);
         serialized_tx.push_str(&vout.scriptpubkey);
     }
 
-    // Need the witness to be added to the coinbase tx so if there is a witness field that is equal to
-    // "0000000000000000000000000000000000000000000000000000000000000000" then push to the serialized tx
-    // before the locktime
+    // If the witness field is == to the witness reserve value, serialize the witness data
+    // This only for the coinbase transaction
     for vin in &transaction.vin {
         if let Some(witness) = &vin.witness {
             if witness[0] == "0000000000000000000000000000000000000000000000000000000000000000" {
@@ -226,6 +241,7 @@ pub fn serialized_segwit_tx(transaction: &Transaction) -> String {
     let lock_hex = hex::encode(lock);
     serialized_tx.push_str(&lock_hex);
 
+    // Return the serialized tx
     serialized_tx
 }
 
@@ -234,6 +250,7 @@ pub fn serialized_segwit_tx(transaction: &Transaction) -> String {
 pub fn serialized_segwit_wtx(transaction: &Transaction) -> String {
     let mut serialized_tx = String::new();
 
+    // Serialize version field, little endian
     let version = transaction.version.to_le_bytes();
     serialized_tx.push_str(&hex::encode(version));
 
@@ -246,7 +263,7 @@ pub fn serialized_segwit_wtx(transaction: &Transaction) -> String {
     let vin_count = transaction.vin.len() as u64;
     serialized_tx.push_str(&format!("{:02x}", vin_count));
 
-
+    // For each vin in the transaction
     for vin in &transaction.vin {
         // Serialize txid, reverse the bytes and push
         let txid_bytes = hex::decode(&vin.txid).unwrap();
@@ -259,19 +276,21 @@ pub fn serialized_segwit_wtx(transaction: &Transaction) -> String {
         let vout_hex = hex::encode(vout);
         serialized_tx.push_str(&vout_hex);
 
+        // If its strictly a segwit tx, scriptsig field is empty so push zero
         serialized_tx.push_str("00");
 
-
+        // Push sequence
         let sequence = &vin.sequence.to_le_bytes();
         let sequence_hex = hex::encode(sequence);
         serialized_tx.push_str(&sequence_hex);
 
     }
 
+    // Push the vout count
     let vout_count = transaction.vout.len() as u64;
     serialized_tx.push_str(&format!("{:02x}", vout_count));
 
-
+    // For each vout in the transaction
     for vout in &transaction.vout {
         // Serialize the value in sats
         let value_bytes = &vout.value.to_le_bytes();
@@ -285,12 +304,14 @@ pub fn serialized_segwit_wtx(transaction: &Transaction) -> String {
         serialized_tx.push_str(&vout.scriptpubkey);
     }
 
+    // For each vin in the transaction
     for vin in &transaction.vin {
         if let Some(witness) = &vin.witness {
             // Serialize the number of stack items in the witness using CompactSize
             let stack_items_bytes = compact_size_as_bytes(witness.len());
             serialized_tx.push_str(&hex::encode(&stack_items_bytes));
 
+            // For each item in the witness
             for witness_item in witness {
                 // Decode witness item to get actual bytes
                 let witness_data = hex::decode(witness_item).unwrap();
@@ -310,24 +331,31 @@ pub fn serialized_segwit_wtx(transaction: &Transaction) -> String {
     let lock_hex = hex::encode(lock);
     serialized_tx.push_str(&lock_hex);
 
+    // Return the serialized tx
     serialized_tx
 }
 
 // Compact size helper method
 /// This function will return the compact size of a given number of bytes
 pub fn compact_size_as_bytes(size: usize) -> Vec<u8> {
+    // Match the size of the bytes
     match size {
+
+        // If the size is less than 0xfd, return the size as a single byte
         0..=0xfc => vec![size as u8],
         0xfd..=0xffff => {
+            // If the size is between 0xfd and 0xffff, return the size as a 2-byte little-endian
             let mut bytes = vec![0xfd];
             bytes.extend_from_slice(&(size as u16).to_le_bytes());
             bytes
         },
+        // If the size is between 0x10000 and 0xffffffff, return the size as a 4-byte little-endian
         0x10000..=0xffffffff => {
             let mut bytes = vec![0xfe];
             bytes.extend_from_slice(&(size as u32).to_le_bytes());
             bytes
         },
+        // If the size is greater than 0xffffffff, return the size as an 8-byte little-endian
         _ => {
             let mut bytes = vec![0xff];
             bytes.extend_from_slice(&(size as u64).to_le_bytes());
@@ -340,8 +368,12 @@ pub fn compact_size_as_bytes(size: usize) -> Vec<u8> {
 /// This function constructs the block. It adds the header, coinbase tx and other txs to the output file
 pub fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], block_txs: &[TransactionForProcessing]) {
     fs::write("../output.txt", "").unwrap();  // Clear the output file
+
+    // Append the serialized header and coinbase tx to the output file
     append_to_file("../output.txt", &hex::encode(serialized_header)).unwrap();
     append_to_file("../output.txt", &hex::encode(serialized_cb_tx)).unwrap();
+
+    // Append the txids of the block txs to the output file
     for tx in block_txs {
         append_to_file("../output.txt", &tx.txid).unwrap();
     }
@@ -360,21 +392,21 @@ pub fn append_to_file(filename: &str, contents: &str) -> io::Result<()> {
 }
 
 // Hashing functions
-/// Hashing Functions
-// Takes in data and returns a ripemd160 hash
+/// This function takes in data and returns a ripemd160 hash
 pub fn ripemd160(data: Vec<u8>) -> Vec<u8> {
     let mut hasher = Ripemd160::new();
     hasher.update(data);
     hasher.finalize().to_vec()
 }
 
-// Takes in data and returns a sha256 hash
+/// Takes in data and returns a sha256 hash
 pub fn sha256(data: Vec<u8>) -> Vec<u8> {
     let mut hasher = Sha256::new();
     hasher.update(data);
     hasher.finalize().to_vec()
 }
 
+/// This function will double sha256 hash the input
 pub fn double_sha256(input: Vec<u8>) -> [u8; 32] {
     let first_hash = sha256(input);
     let second_hash = sha256(first_hash);
@@ -388,7 +420,7 @@ pub fn get_tx_readyfor_signing_legacy(transaction : &mut Transaction) -> Transac
     let scriptsig = &transaction.vin[0].scriptsig;
     let (signature, _pubkey) = get_signature_and_publickey_from_scriptsig(scriptsig).unwrap();
 
-    // removing the scriptsig for each vin and adding the scriptpubkey to the scriptsig field
+    // Removing the scriptsig for each vin and adding the scriptpubkey to the scriptsig field
     for vin in transaction.vin.iter_mut() {
         vin.scriptsig = String::new();
         vin.scriptsig = vin.prevout.scriptpubkey.clone();
@@ -401,7 +433,6 @@ pub fn get_tx_readyfor_signing_legacy(transaction : &mut Transaction) -> Transac
     let sighash = format!("{}000000", sighash_type);
 
     // Adding the sighash to the transaction
-    // It turns a string into a u32
     transaction.sighash = Some(sighash);
 
     // Emptying the scriptsig fields for each input
@@ -423,7 +454,6 @@ pub fn get_tx_readyfor_signing_legacy(transaction : &mut Transaction) -> Transac
     }
 }
 
-// Constructing the message that is needed to validate  singnatue
 /// Function to get segwit message
 pub fn get_segwit_tx_message(
     transaction: &mut Transaction,
@@ -432,39 +462,48 @@ pub fn get_segwit_tx_message(
     sighash_type: u8) ->  Result<String, Box<dyn Error>> {
     let tx = transaction.clone();
 
-
+    // Serialize the version field of the tx little endian
     let version = tx.version.to_le_bytes();
     let version = hex::encode(version);
 
-    // Serialze and hash txid+vout for each vin
+    // Serialize and hash txid+vout for each vin
     let mut input_bytes = Vec::new();
     let mut sequences_bytes = Vec::new();
 
+    // For each input in the transaction
     for vin in tx.vin.iter() {
+        // Serialize the txid and vout
         let txid_bytes = hex::decode(vin.txid.clone()).map_err(|e| e.to_string())?;
         let reversed_txid_bytes: Vec<u8> = txid_bytes.into_iter().rev().collect();
 
         let vout_bytes = vin.vout.to_le_bytes();
 
+        // And push them to the input_bytes
         input_bytes.extend_from_slice(&reversed_txid_bytes);
         input_bytes.extend_from_slice(&vout_bytes);
 
-        //sequence
+        // Same thing with sequence
         let sequence_bytes = vin.sequence.to_le_bytes();
         sequences_bytes.extend_from_slice(&sequence_bytes);
     }
+
+    // Hash the input and sequences bytes
     let input_hash = double_sha256(input_bytes);
     let sequences_hash = double_sha256(sequences_bytes);
 
     //  Serialize the txid+vout for the specific input
+    // Vin gets the specific input
     let vin = &tx.vin[vin_index];
 
+    // Get the txid and reverse the bytes
     let txid_bytes = hex::decode(vin.txid.clone()).unwrap();
     let txid = reverse_bytes(txid_bytes);
 
+    // Get the vout and convert to little endian bytes
     let vout = vin.vout.to_le_bytes();
     let vout = hex::encode(vout);
 
+    // Format the input (txid+vout)
     let input = format!("{}{}", txid, vout);
 
     // Create a scriptcode for the input being signed
@@ -479,24 +518,28 @@ pub fn get_segwit_tx_message(
     let sequence = vin.sequence.to_le_bytes();
     let sequence= hex::encode(sequence);
 
-
+    // Initialize the output hash
     let mut output_bytes = Vec::new();
+
+    // For the outputs in the transaction
     for vout in tx.vout.iter() {
+        // Get the amount in sats and push it
         let amount_le = vout.value.to_le_bytes();
         output_bytes.extend_from_slice(&amount_le);
 
-        // For some reason i get trailing zeros after the compact size so i had to remove them
-        // Do i need to divide the scriptpubkey size by 2?
+        // Get the scriptpubkey size and push it
         let scriptpubkey_size = vout.scriptpubkey.len() / 2;
         let scriptpubkey_size_bytes = compact_size_as_bytes(scriptpubkey_size);
         output_bytes.extend_from_slice(&scriptpubkey_size_bytes);
 
+        // Get the scriptpubkey in bytes
         let scriptpubkey = vout.scriptpubkey.clone();
-        // This is the scriptpubkey in bytes the .
+        // This is the scriptpubkey in bytes then push it
         let scriptpubkey_bytes = hex::decode(scriptpubkey).map_err(|e| e.to_string())?;
         output_bytes.extend_from_slice(&scriptpubkey_bytes);
     }
 
+    // Hash the output bytes
     let output_hash = double_sha256(output_bytes);
 
     // Locktime
@@ -504,11 +547,12 @@ pub fn get_segwit_tx_message(
     let locktime = hex::encode(locktime);
 
     // Need to add the sighash type to the preimage
+    // Convert the sighash type to u32
     let sighash_type_u32 = u32::from_le(sighash_type as u32);
+    // Format the sighash type as a hex string
     let formatted_sighash = hex::encode(sighash_type_u32.to_le_bytes());
 
-    // preimage or message to be signed
-    // Assuming all the variables are already defined and have the correct values
+    // Preimage or message to be signed
     let preimage = format!("{}{}{}{}{}{}{}{}{}{}",
                            version,
                            hex::encode(input_hash),
@@ -522,6 +566,7 @@ pub fn get_segwit_tx_message(
                            formatted_sighash,
     );
 
+    // Return the preimage
     Ok(preimage)
 }
 
@@ -530,11 +575,13 @@ pub fn get_signature_and_publickey_from_scriptsig(scriptsig: &str) -> Result<(St
     // Convert the scriptsig hex string to bytes
     let scriptsig_bytes = hex::decode(scriptsig)?;
 
+    // Initialize the index and the vector to hold the signature and public key
     let mut index = 0;
     let mut sig_and_pubkey_vec = Vec::new();
 
     // Loop through the scriptsig bytes to parse
     while index < scriptsig_bytes.len() {
+        // Check if the index is greater than the length of the scriptsig bytes
         if index+1 >= scriptsig_bytes.len() {
             return Err("Unexpected end of scriptSig".into());
         }
@@ -551,6 +598,7 @@ pub fn get_signature_and_publickey_from_scriptsig(scriptsig: &str) -> Result<(St
         let data = &scriptsig_bytes[index..index+length];
         index+=length; // Move the index to the next opcode
 
+        // Push the data to the sig_and_pubkey_vec
         sig_and_pubkey_vec.push(hex::encode(data));
     }
     // Checking if the sig_and_pubkey_vec has two elements if not fail
@@ -558,6 +606,7 @@ pub fn get_signature_and_publickey_from_scriptsig(scriptsig: &str) -> Result<(St
         return Err(format!("Expected 2 elements, found {}", sig_and_pubkey_vec.len()).into());
     }
 
+    // Return the signature and public key
     Ok((sig_and_pubkey_vec[0].clone(), sig_and_pubkey_vec[1].clone()))
 }
 
