@@ -67,14 +67,11 @@ fn main() {
     let serialized_cb_tx = serialized_segwit_tx(&coinbase_tx);
     let cd_tx_bytes = hex::decode(serialized_cb_tx.clone()).unwrap();
 
-    // coinbase txid
-    let coinebase_tx_for_txid = coinbase_tx.clone();
-    let serialized_cb_tx_for_txid = serialize_tx(&coinebase_tx_for_txid);
+    // Calculate the txid for the coinbase transaction
+    let coinbase_tx_for_txid = coinbase_tx.clone();
+    let serialized_cb_tx_for_txid = serialize_tx(&coinbase_tx_for_txid);
     let cb_txid_bytes = hex::decode(serialized_cb_tx_for_txid).unwrap();
     let coinbase_txid = double_sha256(cb_txid_bytes.clone());
-    // let mut coinbase_txid_le = coinbase_txid.to_vec();
-    // coinbase_txid_le.reverse();
-    // let coinbase_txid = hex::encode(coinbase_txid_le);
     let coinbase_txid = reverse_bytes(coinbase_txid.to_vec());
 
     // Insert the coinbase transaction at the beginning of block_txs
@@ -88,6 +85,7 @@ fn main() {
     block_txs.insert(0, coinbase_tx_for_processing);
 
     // Use block_txs to generate Merkle root
+    // Txids_for_merkle is a vector of txids for the merkle root
     let txids_for_merkle = block_txs.iter().map(|tx| tx.txid.clone()).collect::<Vec<_>>();
     let merkle_root = get_merkle_root(txids_for_merkle.clone());
 
@@ -98,10 +96,8 @@ fn main() {
         let serialized_block_header = serialize_block_header(&block_header);
 
         // Calculate the hash of the block header
-        let  block_hash =  double_sha256(serialized_block_header.clone());
-        let mut block_h = block_hash;
-        block_h.reverse();
-        let block_hash = hex::encode(block_h);
+        let block_hash =  double_sha256(serialized_block_header.clone());
+        let block_hash = reverse_bytes(block_hash.to_vec());
 
         // Check if the hash meets the target
         if hash_meets_difficulty_target(&block_hash) {
