@@ -152,25 +152,29 @@ Finally, the locktime and sighash type, both reversed to little endian and encod
 -	Format all the variables into one preimage string (concatenating them)
 -	Return preimage.
 
-The last key function I want to talk about from util.rs is the get_signature_and_publickey_from_scriptsig() function. This function is designed to pull the signature and public key from the scriptsig of a p2pkh transaction. It takes a scriptsig (in hex), as input and decodes it into bytes. It then iterates through these bytes, checking for the end of the scriptsig and the length of the data to be pushed onto the stack. It reads the data of the specified length from the scriptsig bytes and advances the index by the length of the data. The data is then encoded back into a hexadecimal string and pushed onto a vector. After the loop, the function checks if the vector contains exactly two elements (the signature and the public key). Finally, the function returns the signature and public key as a tuple of strings.
+The final important function I'd like to discuss from the **util.rs** module is **get_signature_and_publickey_from_scriptsig**. This function is specifically designed to extract the signature and public key from the scriptsig of a p2pkh transaction. It begins by taking a scriptsig provided in hex format and decoding it into bytes.
+As it iterates through these bytes, the function checks for the end of the scriptsig and determines the length of the data that should be pushed onto the stack. It reads the data of the specified length from the scriptsig bytes, advancing the index by the length of the data read. This data is then re-encoded into a hexadecimal string and added to a vector.
+After completing the loop, the function verifies that the vector contains exactly two elements. The signature and the public key. If this condition is met, it returns these elements as a tuple of strings.
 ##### Pseudo code:
 -	Decode the scriptsig string from hex to bytes. Store in scriptsig_bytes.
 -	Initialize an index to 0.
 -	Initialize an empty vector sig_and_pubkey_vec.
 -	While index is less than the length of scriptsig_bytes:
-     o	If index plus 1 is greater than or equal to the length of scriptsig_bytes, return an error indicating an unexpected end of scriptsig.
-     o	Get the byte at index in scriptsig_bytes as an integer length. This byte represents the length of data to push (either a signature or a public key).
-     o	Increment index += 1.
-     o	If index plus length is greater than the length of scriptsig_bytes, return an error indicating that the scriptsig length byte exceeds the remaining data.
-     o	Get the slice of scriptsig_bytes from index to index plus length as data.
-     o	Increment index += length.
-     o	Encode data to hex and append to sig_and_pubkey_vec.
+     -	If index plus 1 is greater than or equal to the length of scriptsig_bytes, return an error indicating an unexpected end of scriptsig.
+     -	Get the byte at index in scriptsig_bytes as an integer length. This byte represents the length of data to push (either a signature or a public key).
+     -	Increment index += 1.
+     -	If index plus length is greater than the length of scriptsig_bytes, return an error indicating that the scriptsig length byte exceeds the remaining data.
+     -	Get the slice of scriptsig_bytes from index to index plus length as data.
+     -	Increment index += length.
+     -	Encode data to hex and append to sig_and_pubkey_vec.
 -	If the length of sig_and_pubkey_vec isn't 2, return an error indicating that 2 elements were expected.
 -	Return the first and second elements of sig_and_pubkey_vec (signature and public key).
      
 ### validation.rs
-My validations.rs module is full of functions that need to check if something is valid, and if so, they return true and return the valid variable or variables.
-The first function in this module is process_mempool() this function is what checks each transaction (after they are verified in their respective functions) and adds them to a vector that will be the final transactions in the block! The function begins by accepting a path to the mempool as input and initializing an empty vector valid_txs to store valid transactions. It then iterates over each transaction in the mempool directory. For each transaction, it checks if the path is a file and if so, it deserializes the transaction. It then checks the script type of the transaction and validates it accordingly. If the script type is v0_p2wpkh, it validates the transaction using the p2wpkh_script_validation() function. If the script type is p2pkh, it validates the transaction using the p2pkh_script_validation() function. If the transaction isn't valid, it skips the current function and moves on to the next check. Next, the function checks if the locktime of the transaction is valid by comparing it to the current time. If the locktime is greater than the current time it breaks from the loop and moves to the next transaction. Next, the function calculates the transaction fee using the verify_tx_fee() function and checks for double spending using the check_double_spending() function. If the transaction is a double spend, it again breaks the loop and moves on to the next transaction. Finally, if the transaction passes all the checks, it is added to the valid_txs vector. The function returns the vector containing all the valid transactions with the txid, wtxid, and fee.
+The **validations.rs** module is essential for ensuring the integrity of transactions, as it contains functions dedicated to validation. A key function in this module is **process_mempool**, which examines each transaction post-verification and aggregates the valid ones into a final vector for block inclusion.
+The function starts by receiving a path to the mempool and initializes an empty vector, valid_txs, to store validated transactions. It iterates through each transaction in the mempool directory, checking whether each path is a file and, if so, deserializing the transaction. It assesses the script type of each transaction and validates accordingly: transactions with a v0_p2wpkh script are validated using **p2wpkh_script_validation**, while those with a p2pkh script use **p2pkh_script_validation**. Transactions that fail validation are skipped, and the function proceeds to the next one.
+The function verifies the locktime of each transaction, comparing it against the current time. If the locktime isn't valid, the function skips to the next transaction. It also calculates the transaction fee using **verify_tx_fee** and checks for double spending with **check_double_spending**. Transactions identified as double spends are similarly bypassed.
+If a transaction passes all these checks, it is added to the valid_txs vector. The function ultimately returns this vector, containing all the valid transactions along with their txid, wtxid, and transaction fee.
 ##### Pseudo code:
 -	Initialize an empty vector valid_txs to store valid transactions.
 -	Iterate over each transaction in mempool.
@@ -188,7 +192,9 @@ The first function in this module is process_mempool() this function is what che
 -	If the transaction passes all the checks, add it to the valid_txs vector.
 -	Finally, return the valid_txs vector containing all the valid transactions.
 
-Another key component is the verify_signature() function. This function is called in my p2pkh_script_validation() when the script gets to the OP_CHECKSIG match arm. The function is used to verify the signature of both p2pkh and p2wpkh transactions. It takes three parameters: the signature, the public key, and the serialized transaction. The function first removes the sighash type from the der encoded signature. It then creates a new instance of the secp256k1. The function proceeds to hash the serialized transaction using the double_sha256() function and creates a Message from the hash. It then creates a PublicKey from the provided public key bytes and a Signature from the provided der encoded signature (in bytes). Finally, it verifies the signature against the message and the public key using the verify_ecdsa method of the Secp256k1 crate. If the signature is valid, it returns true, otherwise it returns false!
+Another vital function within the validation framework is **verify_signature**, which is invoked during the **p2pkh_script_validation** and **p2wpkh_script_validation**and when the script reaches the OP_CHECKSIG operation. This function is essential for verifying the authenticity of signatures for both transaction types. It accepts three parameters: the signature, the public key, and the serialized transaction.
+The process begins by stripping the sighash type from the DER-encoded signature. The function then instantiates a new secp256k1 context for cryptographic operations. Using the **double_sha256** function, it hashes the serialized transaction to create a Message object from this hash. It also constructs a PublicKey from the provided bytes and a Signature from the DER-encoded bytes of the signature.
+The core of the function is its ability to verify the signature against the Message and PublicKey using the verify_ecdsa method from the Secp256k1 crate. If the verification confirms the signature's validity, the function returns true; otherwise, it returns false.
 ##### Pseudo code:
 -	Remove the sighash type from the signature.
 -	Create a new instance of the secp256k1.
@@ -199,9 +205,11 @@ Another key component is the verify_signature() function. This function is calle
 -	Verify the signature against the message and the public key using the verify_ecdsa method of the secp256k1.
 -	If the signature is valid, return true, otherwise return false.
 
-The next two functions are some of the most important functions. They are the functions that find valid transactions. Side note, I duplicated the code where it executed the scriptpubkey_asm OP codes just because of time and the need to focus on my proposal. I should have made it a function and called it in each transaction validation function because it is the same logic but I didn't get to it unfortunately.
+The next two functions are among the most crucial in the script, tasked with identifying valid transactions. It's important to note that due to time constraints and my focus on preparing my proposal, I ended up duplicating the code that executes the scriptpubkey_asm OP codes across different parts of the script. Ideally, this logic should have been encapsulated in a single function and called within each transaction validation function to maintain DRY (Don't Repeat Yourself) principles. Unfortunately, I did not manage to implement this improvement, but it remains a notable aspect for future improvements!
 
-Anyway,  p2wpkh_script_validation() is the function that successfully checks and verifies if p2wpkh transactions are valid or not. It uses a stack to hold data and iterates over each input in the transaction. For each input, it pulls the witness data, which includes the signature and the public key. It then executes the locking script, which is similar to a P2PKH locking script. The function performs different operations such as duplicating the top item on the stack, hashing the top item on the stack, comparing the top two items on the stack, and verifying the signature. If the signature is valid, it pushes a 1 onto the stack. If the stack is not empty or does not contain exactly one item, it returns an error. Finally, it serializes the transaction and then hashes them to get the wtxid and the txid. It reverses the bytes for both and returns them along with the validity of the transaction!
+The **p2wpkh_script_validation** function is key in determining the validity of p2wpkh transactions. It utilizes a stack to manage data and iterates over each input within the transaction. For every input, it retrieves the witness data, which typically includes the signature and the public key.
+This function executes operations akin to those found in a p2pkh locking script, involving steps such as duplicating the top item on the stack, hashing it, comparing the top two items, and verifying the signature. If the signature is authenticated successfully, the function pushes a **1** onto the stack to signify a valid input.
+However, the function also includes robust error handling: if the stack either contains more than one item or is empty after processing, it returns an error, indicating a validation failure. Finally, the function serializes the transaction and computes the hashes necessary to generate the wtxid and the txid. It then reverses the bytes of these identifiers before encoding them in hexadecimal and then returning them, along with the transaction's validity status.
 ##### Pseudo code:
 -	First initialize an empty stack.
 -	Iterate over each input in the transaction.
@@ -209,17 +217,19 @@ Anyway,  p2wpkh_script_validation() is the function that successfully checks and
 -	Extract the witness data from the input. If the witness data is missing, return an error.
 -	Remove the signature and the public key from the witness data and push them onto the stack.
 -	Extract the scriptpubkey from the prevout of the input and split it into parts to get the public key hash.
--	Generate the message hash by serializing the transaction and hashing it twice using SHA256.
+-	Generate the message hash by serializing the transaction and hashing it twice using sha256.
 -	Execute the scriptpukey_asm. For each operation in the script:
-     o	If the operation is OP_DUP, duplicate the top item on the stack.
-     o	If the operation is OP_HASH160, pop the top item from the stack, hash it using SHA256, and then RIPEMD160, and push the result back onto the stack.
-     o	If the operation is OP_EQUALVERIFY, pop the top two items from the stack and compare them. If they are not equal, return an error.
-     o	If the operation is OP_CHECKSIG, pop the top two items from the stack (the public key and the signature), and verify the signature. If the signature is invalid, return an error.
-     o	If the operation is not an operator, it's data (like a signature or a public key), so decode it from hex and push it onto the stack.
+     -	If the operation is OP_DUP, duplicate the top item on the stack.
+     -	If the operation is OP_HASH160, pop the top item from the stack, hash it using sha256, and then ripmd160, and push the result back onto the stack.
+     -	If the operation is OP_EQUALVERIFY, pop the top two items from the stack and compare them. If they are not equal, return an error.
+     -	If the operation is OP_CHECKSIG, pop the top two items from the stack (the public key and the signature), and verify the signature. If the signature is invalid, return an error.
+     -	If the operation is not an operator, it's data (like a signature or a public key), so decode it from hex and push it onto the stack.
 -	If the stack is empty or does not contain exactly one item, return an error.
 -	Serialize the transaction to get the wtxid and txid and return them with either true or false.
-     
-The p2pkh_script_validation() function validates p2pkh transactions. It uses a stack to hold data and iterates over each input in the transaction. For each input, it extracts the scriptsig and scriptpubkey. It then prepares the transaction for signing by cloning it and replacing its inputs with the current input. The function performs various operations like the previous function, including duplicating the top item on the stack, hashing the top item on the stack, comparing the top two items on the stack, and verifying the signature. If the signature is valid, it pushes a 1 onto the stack. If the stack is empty or doesn't hold one item, it returns an error. Finally, it serializes the transaction, hashes it twice, reverses the bytes and hex encodes to return a txid and true or false.
+
+The **p2pkh_script_validation** function is essential for validating p2pkh transactions. It operates using a stack to manage data and iterates through each input of the transaction. For every input, the function extracts the scriptsig and scriptpubkey.
+To prepare the transaction for signing, the function clones the entire transaction and replaces its inputs with the current one being processed. It performs several operations similar to those in the **p2wpkh_script_validation** function, such as duplicating the top item on the stack, hashing it, comparing the top two items on the stack, and verifying the signature. If the signature checks out, a **1** is pushed onto the stack as an indicator of validity.
+The function also includes precise error handling—if the stack is empty or does not contain exactly one item after processing, an error is returned. In the final steps, the function serializes the transaction, applies a double hash, reverses the bytes, and hex encodes them to produce a txid. It returns this txid along with a bool indicating the transaction's validity.
 ##### Pseudo code:
 -	Initialize an empty stack.
 -	Iterate over each input in the transaction.
@@ -231,10 +241,15 @@ The p2pkh_script_validation() function validates p2pkh transactions. It uses a s
 -	Execute the scriptpubkey_asm. For each operation in the script execute just like the previous function.
 -	If the stack is empty or does not contain exactly one item, return an error.
 -	Serialize the transaction, hash it twice, reverse the bytes, and return it in hex encoding along with either true or false.
-### block.rs
-My second to last module has two important functions I want to explain, the create_coinbase_tx() function and the construct_block_header() function.
 
-The create_coinbase_tx() function is used to create a coinbase transaction, the serialized coinbase transaction (in the block) and the first txid in the block. The function takes two parameters: total_tx_fee, which represents the total transaction fees in the block, and witness_root_vec, a vector of strings representing the witness root wtxids. It begins by initializing a new Transaction object, coinbase_tx, with default values. The block subsidy (the reward for mining a new block) is calculated as 6.25 (I made this before the halving sats plus the total transaction fees. A p2pkh scriptpubkey is created for the return address. The scriptsig for the block is also created, which includes the block height. Next, the function adds the input to the coinbase_tx transaction. This input has a txid of all zeros. The scriptsig for this input is set to the block scriptsig created earlier. Next, the function adds an output to the coinbase_tx transaction. This output has a scriptpubkey set to the scriptpubkey created earlier, and its value is set to the block subsidy plus fees. The function then calculates the witness root hash and concatenates it with the txid to create the witness commitment. The commitment is hashed and encoded into hex. A second output is added to the coinbase_tx transaction, with a scriptpubkey that includes the witness commitment. This output has a value of 0, as it is used for the witness commitment and does not transfer any sats. Finally, the function returns the coinbase_tx transaction object.
+### block.rs
+The second to last module in my project houses two key functions necessary to the blockchain creation process: **create_coinbase_tx** and **construct_block_header**. Each plays a distinct role in ensuring the block is constructed correctly. In this section, I'll delve into each function’s operations, detailing how they contribute to the creation of my block.
+
+The **create_coinbase_tx** function is crucial for generating the coinbase transaction, which initiates the block and also includes the first txid. This function takes two parameters: total_tx_fee, representing the collective transaction fees within the block, and witness_root_vec, a vector of strings that store witness root wtxids.
+The process begins by initializing a new **Transaction** object, coinbase_tx, with default values. The block subsidy, set at 6.25 BTC (note: this was implemented before the halving), is computed by adding the total transaction fees to this base reward. A p2pkh scriptpubkey is crafted for the miner's return address, and a scriptsig is generated, which includes the block height.
+Next, an input is added to the coinbase_tx. This input features a txid consisting entirely of zeros and is associated with the earlier created block scriptsig. The function then constructs an output for the coinbase_tx, setting its scriptpubkey to the previously created one, with its value determined by the sum of the block subsidy and the transaction fees.
+Later, the function calculates the witness root hash by concatenating it with the witness reserve value to form the witness commitment. This commitment is hashed and converted into a hex format. A second output is added to the coinbase_tx, which incorporates the witness commitment within its scriptpubkey. This output is assigned a value of zero, as it serves purely for the witness commitment and does not involve the transfer of any sats.
+Ultimately, the function returns the fully constructed coinbase_tx transaction object, ready to be serialized and (hashed then) included as the first txid in the block.
 ##### Pseudo code:
 -	Initialize a new Transaction object coinbase_tx with version 0, locktime 0, empty vectors for vin and vout, and None for sighash.
 -	Calculate the block subsidy plus fees as 625000000 (I made this before the halving) plus total_tx_fee. Store this in block_sub_plus_fees.
@@ -243,43 +258,46 @@ The create_coinbase_tx() function is used to create a coinbase transaction, the 
 -	Set the version of coinbase_tx to 0.
 -	Define a txid of all zeros.
 -	Add an input to coinbase_tx with the following properties:
-     o	txid.
-     o	vout is 0xffffffff.
-     o	prevout is a Prevout object with empty strings for scriptpubkey, scriptpubkey_asm, scriptpubkey_type, scriptpubkey_address, and 0 for value.
-     o	scriptsig is block_scriptsig.
-     o	scriptsig_asm is OP_PUSHBYTES_3 837122.
-     o	witness is a vector containing txid (zeros).
-     o	is_coinbase is true.
-     o	sequence is 0xffffffff.
+     -	txid.
+     -	vout is 0xffffffff.
+     -	prevout is a Prevout object with empty strings for scriptpubkey, scriptpubkey_asm, scriptpubkey_type, scriptpubkey_address, and 0 for value.
+     -	scriptsig is block_scriptsig.
+     -	scriptsig_asm is OP_PUSHBYTES_3 837122.
+     -	witness is a vector containing txid (zeros).
+     -	is_coinbase is true.
+     -	sequence is 0xffffffff.
 -	Add an output to coinbase_tx with the following properties:
-     o	scriptpubkey is scriptpubkey.
-     o	scriptpubkey_asm is OP_DUP OP_HASH160 OP_PUSHBYTES_20 06f1b66fd59a34755c37a8f701f43e937cdbeb13 OP_EQUALVERIFY OP_CHECKSIG.
-     o	scriptpubkey_type is p2pkh.
-     o	scriptpubkey_address is None.
-     o	value is block_sub_plus_fees.
+     -	scriptpubkey is scriptpubkey.
+     -	scriptpubkey_asm is OP_DUP OP_HASH160 OP_PUSHBYTES_20 06f1b66fd59a34755c37a8f701f43e937cdbeb13 OP_EQUALVERIFY OP_CHECKSIG.
+     -	scriptpubkey_type is p2pkh.
+     -	scriptpubkey_address is None.
+     -	value is block_sub_plus_fees.
 -	Calculate the witness root hash from witness_root_vec. Store this in witness_root_hash.
 -	Concatenate witness_root_hash and txid (same as witness reserve value). Store in concant_items.
 -	Decode concant_items from hex to bytes. Store in wtxid_items_bytes.
--	Calculate the double SHA256 hash of wtxid_items_bytes. Encode in hex. Store in wtxid_commitment.
--	Format a scriptpubkey for the witness commitment. Store inscriptpubkey_for_wtxid_test.
+-	Calculate the double sha256 hash of wtxid_items_bytes. Encode in hex. Store in wtxid_commitment.
+-	Format a scriptpubkey for the witness commitment. Store in scriptpubkey_for_wtxid_test variable.
 -	Add a second output to coinbase_tx:
-     o	scriptpubkey is scriptpubkey_for_wtxid_test.
-     o	scriptpubkey_asm is OP_RETURN OP_PUSHBYTES_36 aa21a9ed plus wtxid_commitment.
-     o	scriptpubkey_type is op_return.
-     o	scriptpubkey_address is None.
-     o	value is 0.
+     -	scriptpubkey is scriptpubkey_for_wtxid_test (I should have changed the variable name).
+     -	scriptpubkey_asm is OP_RETURN OP_PUSHBYTES_36 aa21a9ed plus wtxid_commitment.
+     -	scriptpubkey_type is op_return.
+     -	scriptpubkey_address is None.
+     -	value is 0.
 -	Return coinbase_tx.
 
-Finally, the construct_block_header() function. This function constructs a blockheader so I could be serialized and then hashed to compare to the difficulty target. The function takes two parameters: nonce, a 32-bit unsigned integer, and merkle_root, a string. I created a BlockHeader struct with default values, including a version number, an empty previous block hash, the provided merkle root, a timestamp of 0, a hardcoded bits value, and a nonce of 0. Next, it decodes the previous block hash from hex to bytes, reverses the byte order, and encodes it back to a hex string. This reversed hex string is then set as the prev_block_hash in the BlockHeader struct. Then the function gets the current system time, calculates the duration since the UNIX_EPOCH in seconds, and sets this value as the timestamp in the BlockHeader struct. Finally, it sets the nonce in the BlockHeader struct to the nonce passed into the function (the nonce is incremented by one in main until the hash <= target) and returns the BlockHeader struct.
+The **construct_block_header** function is pivotal for assembling a block header, which is afterward serialized and hashed to check against the difficulty target. This function requires two parameters: nonce, and the merkle_root.
+The process begins with the initialization of a **BlockHeader** struct, populated with default values including a version number, an initially empty previous block hash, the provided merkle root, a timestamp set to 0, a hardcoded difficulty value (bits), and a nonce initialized to 0. The function then processes the previous block hash by decoding it from hex to bytes, reversing the byte order, and encoding it back to a hex string. This modified hex string is then assigned as the prev_block_hash in the **BlockHeader** struct.
+Next, the function retrieves the current system time and calculates the duration since the UNIX_EPOCH in seconds. This timestamp is then set in the BlockHeader struct. The nonce provided by the function's parameter is finally set in the BlockHeader, where it can be incrementally adjusted within the main mining loop until the resultant hash meets or falls below the target difficulty.
+The function concludes by returning the fully prepared **BlockHeader** struct, ready for use in the mining process.
 ##### Pseudo code:
 -	Define a function construct_block_header that takes two parameters: nonce and merkle_root.
 -	Initialize a BlockHeader struct with:
-     o	version set to 0x20000000
-     o	prev_block_hash set to an empty string
-     o	merkle_root set to the input merkle_root
-     o	timestamp set to 0
-     o	bits` set to 0x1f00ffff (this is a hardcoded value)
-     o	nonce set to 0
+     -	version set to 0x20000000
+     -	prev_block_hash set to an empty string
+     -	merkle_root set to the input merkle_root
+     -	timestamp set to 0
+     -	bits` set to 0x1f00ffff (this is a hardcoded value)
+     -	nonce set to 0
 -	Define a string prev_block_hash with the block hash from the block that came before mine.
 -	Decode prev_block_hash from hex to bytes.
 -	Reverse the byte order of the decoded prev_block_hash.
@@ -291,8 +309,13 @@ Finally, the construct_block_header() function. This function constructs a block
 -	Return the BlockHeader struct.
 
 ### main.rs
-Finally, in main.rs, the driver function mines the block. Main begins by initializing a handful of variables and pulling the helper functions I created in the other modules to help construct and mine the block. It starts by defining the path to the mempool folder and initializing the nonce value to 0. The valid_txs variable calls the process_mempool() function that returns a vector of valid transactions. Then initializes an empty vector block_txs to store the transactions for the block, as well as total_weight to keep track of the total weight of the transactions. The maximum block weight is set to 4000000. Next, the total_fees variable is initialized to 0 to keep track of the total transaction fees, and the valid transactions are sorted in descending order by fee. The function then iterates over the sorted transactions, calculating the weight of each transaction. If adding the weight of a transaction to the total weight would exceed the maximum block weight, the loop breaks. Otherwise, the transaction is added to block_txs, and its weight and fee are added to total_weight and total_fees. The transactions in block_txs are then sorted in descending order by fee. A vector wtx_ids_for_witness_root is initialized to store the wtxid for the witness root. The function iterates over block_txs, and for each transaction, if it's a p2wpkh transaction, the wtxid is added to wtx_ids_for_witness_root. Otherwise, the txid is added. The function then generates the coinbase transaction is called and the total_fees and wtx_ids_for_witness_root variables are passed in before I serialize it. The serialized coinbase transaction is decoded from hex to bytes. The txid of the coinbase transaction is calculated, reversed to little-endian format, and encoded to hex. The coinbase transaction is then inserted at the beginning of block_txs. The merkle root is generated next from the txids in block_txs. Finally, the function then enters a mining loop. In each iteration, it constructs the block header with the nonce, the merkle root, and serializes it. It calculates the hash of the serialized block header, reverses it to little-endian format, and encodes it to hex. If the hash meets the difficulty target, the block is written to a file a success message is printed, and the loop breaks. Otherwise, the nonce is incremented and the loop continues until a block is found.
-##### Pseudo code for main.rs
+In **main**, the driver function initiates the block mining process by setting up several critical variables and leveraging helper functions from other modules to construct and mine the block. The process begins with defining the path to the mempool folder and initializing the nonce to 0. The **process_mempool** function is then called to retrieve a vector of valid transactions, stored in the valid_txs variable.
+An empty vector, block_txs, is initialized to hold the transactions for the block, alongside a total_weight variable to track the cumulative weight of these transactions. The maximum allowable block weight is set at 4,000,000. The total_fees variable starts at 0 to aggregate the transaction fees, and the valid transactions are sorted in descending order by the fee.
+As the function iterates over the sorted transactions, it calculates the weight of each transaction. If adding a transaction’s weight to total_weight would exceed the maximum block weight, the loop breaks. Otherwise, the transaction is added to block_txs, and its weight and fee are accumulated into total_weight and total_fees.
+The transactions in block_txs are then sorted again in descending order by fee. A vector wtx_ids_for_witness_root is initialized to store the wtxids for the witness root calculation. During iteration over block_txs, if a transaction is a pw2pkh, its wtxid is added to wtx_ids_for_witness_root; otherwise, its txid is added.
+The **create_coinbase_tx** function is then invoked with total_fees and wtx_ids_for_witness_root as parameters, and the resulting coinbase transaction is serialized from hex to bytes. The txid for the coinbase transaction is computed, reversed to little endian format, and encoded to hex. This coinbase transaction is subsequently inserted at the beginning of block_txs.
+Next, the function generates the merkle root from the txids of the transactions in block_txs. The mining loop then begins: in each iteration, the block header is constructed with the current nonce and the merkle root, then serialized. The hash of this serialized block header is calculated, reversed to little endian format, and encoded to hex. If this hash meets the difficulty target, the block is written to a file, a success message is printed, and the loop terminates. If not, the nonce is incremented by 1, and the loop continues until a valid block is mined.
+##### Pseudo code:
 -	Define the path to the mempool folder.
 -	Initialize the nonce value to 0.
 -	Get the valid transactions from the mempool.
@@ -302,24 +325,24 @@ Finally, in main.rs, the driver function mines the block. Main begins by initial
 -	Initialize total_fees to 0 to keep track of the total transaction fees.
 -	Sort the valid transactions in descending order by fee.
 -	For each transaction in the sorted transactions:
-     o	Calculate the weight of the transaction.
-     o	If adding this transaction would exceed the maximum block weight, break the loop.
-     o	Otherwise, add the transaction to block_txs, and add its weight and fee to total_weight and total_fees.
+     -	Calculate the weight of the transaction.
+     -	If adding this transaction would exceed the maximum block weight, break the loop.
+     -	Otherwise, add the transaction to block_txs, and add its weight and fee to total_weight and total_fees.
 -	Sort block_txs in descending order by fee.
 -	Initialize a vector wtx_ids_for_witness_root to store the witness wtxid for the witness root.
 -	For each transaction in block_txs:
-     o	If the transaction is a p2wpk transaction and has a wtxid, add the wtxid to wtx_ids_for_witness_root.
-     o	Otherwise, add the txid to wtx_ids_for_witness_root.
+     -	If the transaction is a p2wpk transaction and has a wtxid, add the wtxid to wtx_ids_for_witness_root.
+     -	Otherwise, add the txid to wtx_ids_for_witness_root.
 -	Generate the coinbase transaction with total_fees and wtx_ids_for_witness_root and serialize it.
 -	Decode the serialized coinbase transaction from hex to bytes.
 -	Calculate the txid of the coinbase transaction, reverse it to little-endian format, and encode it to hex.
 -	Insert the coinbase transaction at the beginning of block_txs.
 -	Generate the Merkle root from the txids in block_txs.
 -	Start the mining loop:
-     o	Construct the block header with the nonce and merkle root and serialize it.
-     o	Calculate the hash of the serialized block header, reverse it to little-endian format, and encode it to hex.
-     o	If the hash is <= difficulty target, write the block to a file and print a success message, then break the loop.
-     o	Otherwise, increment the nonce and continue the loop.
+     -	Construct the block header with the nonce and merkle root and serialize it.
+     -	Calculate the hash of the serialized block header, reverse it to little-endian format, and encode it to hex.
+     -	If the hash is <= difficulty target, write the block to a file and print a success message, then break the loop.
+     -	Otherwise, increment the nonce and continue the loop.
 
 ## Results and Performance
 The results of my project have been promising, earning a score of 88! However, I still have a lot of room for improvement. I would have liked to validate p2sh or p2wsh transactions, so I had enough valid transactions to better test the efficiency of my code. In the current state, my script validates every valid p2pkh and p2wpkh transaction and after I add them all to the block, I still have around 500k weight units left over. So, in the future, I'd wish to improve the number of transaction types I could validate. Throughout the project, I significantly optimized the mining process, reducing the average mining time from nearly 10 minutes to just 1.5 minutes. This improvement stemmed from a key modification in how I handled mempool data: I implemented a buffer in the deserialize_tx() function, which allowed for bulk reading of mempool files. This approach is more efficient than processing data byte-by-byte or in small chunks, as it minimizes read operations and speeds up JSON parsing by serde.
