@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-// Transaction struct that may be overcomplicated right now. We will see
+// Transaction struct to store the transaction details
 #[derive(Debug, Deserialize, Clone)]
 pub struct Transaction {
     pub version: u32,
@@ -20,6 +20,7 @@ pub struct TransactionForProcessing {
     pub is_p2wpkh: bool,
 }
 
+// Vin struct to store the transaction input details
 #[derive(Debug, Deserialize, Clone)]
 pub struct Vin {
     pub txid: String,
@@ -32,6 +33,7 @@ pub struct Vin {
     pub sequence: u32,
 }
 
+// Prevout struct stores the previous output details
 #[derive(Debug, Deserialize, Clone)]
 pub struct Prevout {
     pub scriptpubkey: String,
@@ -41,6 +43,7 @@ pub struct Prevout {
     pub value: u64,
 }
 
+// Vout struct stores the transaction output details
 #[derive(Debug, Deserialize, Clone)]
 pub struct Vout {
     pub scriptpubkey: String,
@@ -50,6 +53,7 @@ pub struct Vout {
     pub value: u64,
 }
 
+// BlockHeader struct stores the block header details
 pub struct BlockHeader {
     pub version: u32,
     pub prev_block_hash: String,
