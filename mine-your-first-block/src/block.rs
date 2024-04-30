@@ -100,20 +100,19 @@ pub fn construct_block_header(nonce: u32, merkle_root: String) -> BlockHeader {
 
     // This is the previous block hash from the mempool
     let prev_block_hash = "0000000000000000000205e5b86991b1b0a370fb7e2b7126d32de18e48e556c4";
-    // let decode_prev_block_hash = hex::decode(prev_block_hash).unwrap();
-    // let reversed_prev_block_hash = decode_prev_block_hash.iter().rev().cloned().collect::<Vec<u8>>();
-    // let reversed_hex = hex::encode(reversed_prev_block_hash);
     let reversed_hex = reverse_bytes(hex::decode(prev_block_hash).unwrap());
     block_header.prev_block_hash = reversed_hex.to_string();
 
+    // Timestamp uses std::time::SystemTime to get the current time
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
     block_header.timestamp = timestamp as u32;
 
-    // Nonce
+    // The nonce value is incremented +=1 until the hash meets the target
     block_header.nonce = nonce; // pass in a nonce from main
 
+    // Return the block header
     block_header
 }
