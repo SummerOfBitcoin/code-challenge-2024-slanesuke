@@ -28,7 +28,7 @@ pub fn create_coinbase_tx(total_tx_fee: u64, witness_root_vec: Vec<String>) -> T
     coinbase_tx.version = 0;
 
     // The txid variable is the witness data also
-    let txid= "0000000000000000000000000000000000000000000000000000000000000000".to_string();
+    let txid = "0000000000000000000000000000000000000000000000000000000000000000".to_string();
 
     // Initialize the input for the coinbase transaction
     coinbase_tx.vin.push(Vin {
@@ -65,7 +65,7 @@ pub fn create_coinbase_tx(total_tx_fee: u64, witness_root_vec: Vec<String>) -> T
 
     // Double hash the witness commitment, then format it for the scriptpubkey
     let wtxid_items_bytes = hex::decode(concant_items).unwrap();
-    let wtxid_commitment_test =  double_sha256(wtxid_items_bytes);
+    let wtxid_commitment_test = double_sha256(wtxid_items_bytes);
     let wtxid_commitment = hex::encode(wtxid_commitment_test);
     let scriptpubkey_for_wtxid_test = format!("6a24aa21a9ed{}", wtxid_commitment);
 
@@ -88,7 +88,7 @@ pub fn construct_block_header(nonce: u32, merkle_root: String) -> BlockHeader {
     // The function takes a nonce and merkle root as input and returns a block header struct
 
     // Initialize the block header
-    let mut block_header = BlockHeader{
+    let mut block_header = BlockHeader {
         version: 0x20000000,
         prev_block_hash: "".to_string(),
         merkle_root: merkle_root.to_string(),

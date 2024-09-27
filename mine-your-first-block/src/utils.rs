@@ -1,22 +1,21 @@
+use ripemd::Ripemd160;
 use serde_json;
 use sha2::{Digest as ShaDigest, Sha256};
 use std::fs::File;
-use std::io::{self, Write, BufReader};
-use ripemd::Ripemd160;
 use std::fs::OpenOptions;
+use std::io::{self, BufReader, Write};
 extern crate secp256k1;
+use crate::transactions::{BlockHeader, Transaction, TransactionForProcessing};
+use byteorder::{LittleEndian, WriteBytesExt};
 use std::error::Error;
 use std::fs;
-use byteorder::{LittleEndian, WriteBytesExt};
-use crate::transactions::{BlockHeader, Transaction, TransactionForProcessing};
-
 
 /// This function calculates the merkle root.
 pub fn get_merkle_root(txids: Vec<String>) -> String {
-
     // This will iterate over each txid, decode from hex and reverse the byte order and collect
     // into a vector of 32 byte arrays for hashing
-    let mut be_txid = txids.iter()
+    let mut be_txid = txids
+        .iter()
         .map(|txid| {
             let decoded_id = hex::decode(txid).unwrap();
             let reversed_id = decoded_id.iter().rev().cloned().collect::<Vec<u8>>();
@@ -34,15 +33,20 @@ pub fn get_merkle_root(txids: Vec<String>) -> String {
         }
 
         // This will iterate over the txids (as bytes) in pairs of 2, concatenate them together and hash them
-        be_txid = be_txid.chunks(2)
+        be_txid = be_txid
+            .chunks(2)
             .map(|pair| {
                 let mut hasher = Sha256::new();
                 hasher.update(pair[0]);
                 hasher.update(pair[1]);
                 let first_hash = hasher.finalize_reset().to_vec();
                 hasher.update(first_hash);
-                hasher.finalize().try_into().expect("Hash should be 32 bytes")
-            }).collect()
+                hasher
+                    .finalize()
+                    .try_into()
+                    .expect("Hash should be 32 bytes")
+            })
+            .collect()
     }
 
     // Return the merkle root as a hex string
@@ -74,12 +78,22 @@ pub fn serialize_block_header(block_header: &BlockHeader) -> Vec<u8> {
     {
         let mut writer = &mut buffer[..];
         // Write each field directly into the buffer at the correct position
-        writer.write_u32::<LittleEndian>(block_header.version).unwrap();
-        writer.write_all(&hex::decode(&block_header.prev_block_hash).unwrap()).unwrap();
-        writer.write_all(&hex::decode(&block_header.merkle_root).unwrap()).unwrap();
-        writer.write_u32::<LittleEndian>(block_header.timestamp).unwrap();
+        writer
+            .write_u32::<LittleEndian>(block_header.version)
+            .unwrap();
+        writer
+            .write_all(&hex::decode(&block_header.prev_block_hash).unwrap())
+            .unwrap();
+        writer
+            .write_all(&hex::decode(&block_header.merkle_root).unwrap())
+            .unwrap();
+        writer
+            .write_u32::<LittleEndian>(block_header.timestamp)
+            .unwrap();
         writer.write_u32::<LittleEndian>(block_header.bits).unwrap();
-        writer.write_u32::<LittleEndian>(block_header.nonce).unwrap();
+        writer
+            .write_u32::<LittleEndian>(block_header.nonce)
+            .unwrap();
     }
 
     // Return the serialized block header
@@ -102,7 +116,6 @@ pub fn serialize_tx(transaction: &Transaction) -> String {
 
     // Serialize txid
     for vin in &transaction.vin {
-
         // Reverse the byte order of txid and push
         let txid_bytes = hex::decode(&vin.txid).unwrap();
         let reversed_txid = reverse_bytes(txid_bytes);
@@ -132,7 +145,6 @@ pub fn serialize_tx(transaction: &Transaction) -> String {
 
     // Now serialize vout count
     for vout in &transaction.vout {
-
         // Next push the amount of sats little endian
         let value = &vout.value.to_le_bytes();
         serialized_tx.push_str(&hex::encode(value));
@@ -180,7 +192,7 @@ pub fn serialized_segwit_tx(transaction: &Transaction) -> String {
     for vin in &transaction.vin {
         // Serialize txid and push
         let txid_bytes = hex::decode(&vin.txid).unwrap();
-        let reversed_txid= reverse_bytes(txid_bytes);
+        let reversed_txid = reverse_bytes(txid_bytes);
         serialized_tx.push_str(&reversed_txid);
 
         // Serialize vout and push
@@ -245,7 +257,6 @@ pub fn serialized_segwit_tx(transaction: &Transaction) -> String {
     serialized_tx
 }
 
-
 /// This function will serialize a segwit wtransaction into a string of hex bytes
 pub fn serialized_segwit_wtx(transaction: &Transaction) -> String {
     let mut serialized_tx = String::new();
@@ -270,7 +281,6 @@ pub fn serialized_segwit_wtx(transaction: &Transaction) -> String {
         let reversed_txid = reverse_bytes(txid_bytes);
         serialized_tx.push_str(&reversed_txid);
 
-
         // Serialize vout and push
         let vout = &vin.vout.to_le_bytes();
         let vout_hex = hex::encode(vout);
@@ -283,7 +293,6 @@ pub fn serialized_segwit_wtx(transaction: &Transaction) -> String {
         let sequence = &vin.sequence.to_le_bytes();
         let sequence_hex = hex::encode(sequence);
         serialized_tx.push_str(&sequence_hex);
-
     }
 
     // Push the vout count
@@ -340,7 +349,6 @@ pub fn serialized_segwit_wtx(transaction: &Transaction) -> String {
 pub fn compact_size_as_bytes(size: usize) -> Vec<u8> {
     // Match the size of the bytes
     match size {
-
         // If the size is less than 0xfd, return the size as a single byte
         0..=0xfc => vec![size as u8],
         0xfd..=0xffff => {
@@ -348,26 +356,30 @@ pub fn compact_size_as_bytes(size: usize) -> Vec<u8> {
             let mut bytes = vec![0xfd];
             bytes.extend_from_slice(&(size as u16).to_le_bytes());
             bytes
-        },
+        }
         // If the size is between 0x10000 and 0xffffffff, return the size as a 4-byte little-endian
         0x10000..=0xffffffff => {
             let mut bytes = vec![0xfe];
             bytes.extend_from_slice(&(size as u32).to_le_bytes());
             bytes
-        },
+        }
         // If the size is greater than 0xffffffff, return the size as an 8-byte little-endian
         _ => {
             let mut bytes = vec![0xff];
             bytes.extend_from_slice(&(size as u64).to_le_bytes());
             bytes
-        },
+        }
     }
 }
 
 // File io operations
 /// This function constructs the block. It adds the header, coinbase tx and other txs to the output file
-pub fn write_block_to_file(serialized_header: &[u8], serialized_cb_tx: &[u8], block_txs: &[TransactionForProcessing]) {
-    fs::write("../output.txt", "").unwrap();  // Clear the output file
+pub fn write_block_to_file(
+    serialized_header: &[u8],
+    serialized_cb_tx: &[u8],
+    block_txs: &[TransactionForProcessing],
+) {
+    fs::write("../output.txt", "").unwrap(); // Clear the output file
 
     // Append the serialized header and coinbase tx to the output file
     append_to_file("../output.txt", &hex::encode(serialized_header)).unwrap();
@@ -410,12 +422,14 @@ pub fn sha256(data: Vec<u8>) -> Vec<u8> {
 pub fn double_sha256(input: Vec<u8>) -> [u8; 32] {
     let first_hash = sha256(input);
     let second_hash = sha256(first_hash);
-    second_hash.try_into().expect("Expected a Vec<u8> of length 32")
+    second_hash
+        .try_into()
+        .expect("Expected a Vec<u8> of length 32")
 }
 
 /// This function will get the tx ready for signing by removing the scriptsig and adding the
 /// scriptpubkey to the scriptsig field and adding the sighash to the transaction
-pub fn get_tx_readyfor_signing_legacy(transaction : &mut Transaction) -> Transaction {
+pub fn get_tx_readyfor_signing_legacy(transaction: &mut Transaction) -> Transaction {
     // Get the signature and public key from the scriptsig
     let scriptsig = &transaction.vin[0].scriptsig;
     let (signature, _pubkey) = get_signature_and_publickey_from_scriptsig(scriptsig).unwrap();
@@ -427,7 +441,7 @@ pub fn get_tx_readyfor_signing_legacy(transaction : &mut Transaction) -> Transac
     }
 
     // Using the last two bytes of the signature as the sighash type for now
-    let sighash_type = &signature[signature.len()-2..];
+    let sighash_type = &signature[signature.len() - 2..];
 
     // Hard coding the sighash type for now
     let sighash = format!("{}000000", sighash_type);
@@ -441,7 +455,7 @@ pub fn get_tx_readyfor_signing_legacy(transaction : &mut Transaction) -> Transac
         vin.scriptsig = String::new();
 
         // Copy the scriptpubkey to the scriptsig field
-        vin.scriptsig  = vin.prevout.scriptpubkey.clone();
+        vin.scriptsig = vin.prevout.scriptpubkey.clone();
     }
 
     // Return the tx
@@ -459,7 +473,8 @@ pub fn get_segwit_tx_message(
     transaction: &mut Transaction,
     vin_index: usize,
     pubkey_hash: &str,
-    sighash_type: u8) ->  Result<String, Box<dyn Error>> {
+    sighash_type: u8,
+) -> Result<String, Box<dyn Error>> {
     let tx = transaction.clone();
 
     // Serialize the version field of the tx little endian
@@ -516,7 +531,7 @@ pub fn get_segwit_tx_message(
 
     // Sequence for input we sign
     let sequence = vin.sequence.to_le_bytes();
-    let sequence= hex::encode(sequence);
+    let sequence = hex::encode(sequence);
 
     // Initialize the output hash
     let mut output_bytes = Vec::new();
@@ -553,17 +568,18 @@ pub fn get_segwit_tx_message(
     let formatted_sighash = hex::encode(sighash_type_u32.to_le_bytes());
 
     // Preimage or message to be signed
-    let preimage = format!("{}{}{}{}{}{}{}{}{}{}",
-                           version,
-                           hex::encode(input_hash),
-                           hex::encode(sequences_hash),
-                           input,
-                           scriptcode,
-                           amount_le,
-                           sequence,
-                           hex::encode(output_hash),
-                           locktime,
-                           formatted_sighash,
+    let preimage = format!(
+        "{}{}{}{}{}{}{}{}{}{}",
+        version,
+        hex::encode(input_hash),
+        hex::encode(sequences_hash),
+        input,
+        scriptcode,
+        amount_le,
+        sequence,
+        hex::encode(output_hash),
+        locktime,
+        formatted_sighash,
     );
 
     // Return the preimage
@@ -571,7 +587,9 @@ pub fn get_segwit_tx_message(
 }
 
 /// This function gets the signature and public key from the scriptsig of a legacy transaction
-pub fn get_signature_and_publickey_from_scriptsig(scriptsig: &str) -> Result<(String, String), Box<dyn Error>> {
+pub fn get_signature_and_publickey_from_scriptsig(
+    scriptsig: &str,
+) -> Result<(String, String), Box<dyn Error>> {
     // Convert the scriptsig hex string to bytes
     let scriptsig_bytes = hex::decode(scriptsig)?;
 
@@ -582,7 +600,7 @@ pub fn get_signature_and_publickey_from_scriptsig(scriptsig: &str) -> Result<(St
     // Loop through the scriptsig bytes to parse
     while index < scriptsig_bytes.len() {
         // Check if the index is greater than the length of the scriptsig bytes
-        if index+1 >= scriptsig_bytes.len() {
+        if index + 1 >= scriptsig_bytes.len() {
             return Err("Unexpected end of scriptSig".into());
         }
 
@@ -595,8 +613,8 @@ pub fn get_signature_and_publickey_from_scriptsig(scriptsig: &str) -> Result<(St
         }
 
         // Get the data of the opcode length
-        let data = &scriptsig_bytes[index..index+length];
-        index+=length; // Move the index to the next opcode
+        let data = &scriptsig_bytes[index..index + length];
+        index += length; // Move the index to the next opcode
 
         // Push the data to the sig_and_pubkey_vec
         sig_and_pubkey_vec.push(hex::encode(data));
@@ -609,7 +627,6 @@ pub fn get_signature_and_publickey_from_scriptsig(scriptsig: &str) -> Result<(St
     // Return the signature and public key
     Ok((sig_and_pubkey_vec[0].clone(), sig_and_pubkey_vec[1].clone()))
 }
-
 
 /// This function will reverse the bytes and return a hex string
 pub fn reverse_bytes(mut bytes: Vec<u8>) -> String {
@@ -627,5 +644,5 @@ pub fn calculate_transaction_weight(tx: &Transaction) -> u64 {
     // Calculate weight of the transaction
     let tx_weight = base_size * 1.8 as u64 + total_size;
 
-    tx_weight   // Return the weight of the transaction
+    tx_weight // Return the weight of the transaction
 }

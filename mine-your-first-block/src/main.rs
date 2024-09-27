@@ -1,12 +1,12 @@
-mod transactions;
-mod validation;
-mod utils;
 mod block;
-use transactions::*;
-use validation::*;
-use utils::*;
+mod transactions;
+mod utils;
+mod validation;
 use block::*;
 use itertools::Itertools;
+use transactions::*;
+use utils::*;
+use validation::*;
 
 /// The main driver function that mines the block
 fn main() {
@@ -27,7 +27,8 @@ fn main() {
     let mut total_fees = 0u64;
 
     // Sort transactions by fee in descending order before processing
-    let sorted_valid_txs: Vec<_> = valid_txs.iter()
+    let sorted_valid_txs: Vec<_> = valid_txs
+        .iter()
         .sorted_by(|a, b| b.fee.cmp(&a.fee))
         .collect();
 
@@ -35,7 +36,7 @@ fn main() {
     for tx in sorted_valid_txs {
         let tx_weight = calculate_transaction_weight(&tx.transaction);
         if total_weight + tx_weight > max_block_weight {
-            break;  // Stop if adding this transaction would exceed the max block weight
+            break; // Stop if adding this transaction would exceed the max block weight
         }
         block_txs.push(tx.clone()); // Add the transaction to the block
         total_weight += tx_weight; // Add the weight to the total weight
@@ -47,17 +48,18 @@ fn main() {
 
     // Get the wtxids for the witness root
     // Initialize the wtxids with the coinbase transaction
-    let mut wtx_ids_for_witness_root = vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
+    let mut wtx_ids_for_witness_root =
+        vec!["0000000000000000000000000000000000000000000000000000000000000000".to_string()];
 
     // Collect wtxids for witness root
     for tx in &block_txs {
         // If the transaction is p2wpkh, use the wtxid, otherwise use the txid
         if tx.is_p2wpkh {
             if let Some(ref wtxid) = tx.wtxid {
-                wtx_ids_for_witness_root.push(wtxid.clone());  // Collect wtxid if valid
+                wtx_ids_for_witness_root.push(wtxid.clone()); // Collect wtxid if valid
             }
         } else {
-            wtx_ids_for_witness_root.push(tx.txid.clone());  // Collect txid if not p2wpkh
+            wtx_ids_for_witness_root.push(tx.txid.clone()); // Collect txid if not p2wpkh
         }
     }
 
@@ -85,7 +87,10 @@ fn main() {
 
     // Use block_txs to generate Merkle root
     // Txids_for_merkle is a vector of txids for the merkle root
-    let txids_for_merkle = block_txs.iter().map(|tx| tx.txid.clone()).collect::<Vec<_>>();
+    let txids_for_merkle = block_txs
+        .iter()
+        .map(|tx| tx.txid.clone())
+        .collect::<Vec<_>>();
     let merkle_root = get_merkle_root(txids_for_merkle.clone());
 
     // Start Mining!
@@ -95,7 +100,7 @@ fn main() {
         let serialized_block_header = serialize_block_header(&block_header);
 
         // Calculate the hash of the block header
-        let block_hash =  double_sha256(serialized_block_header.clone());
+        let block_hash = double_sha256(serialized_block_header.clone());
         let block_hash = reverse_bytes(block_hash.to_vec());
 
         // Check if the hash meets the target

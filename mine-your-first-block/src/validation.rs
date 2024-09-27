@@ -1,13 +1,17 @@
-use crate::transactions::{Transaction,  TransactionForProcessing};
+use crate::transactions::{Transaction, TransactionForProcessing};
 use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
 extern crate secp256k1;
-use secp256k1::{PublicKey, Secp256k1, Message};
+use crate::utils::{
+    deserialize_tx, double_sha256, get_segwit_tx_message,
+    get_signature_and_publickey_from_scriptsig, get_tx_readyfor_signing_legacy, reverse_bytes,
+    ripemd160, serialize_tx, serialized_segwit_tx, serialized_segwit_wtx, sha256,
+};
+use primitive_types::U256;
+use secp256k1::ecdsa::Signature;
+use secp256k1::{Message, PublicKey, Secp256k1};
 use std::error::Error;
 use std::fs;
-use secp256k1::ecdsa::Signature;
-use primitive_types::U256;
-use crate::utils::{deserialize_tx, double_sha256, get_segwit_tx_message, get_signature_and_publickey_from_scriptsig, get_tx_readyfor_signing_legacy, reverse_bytes, ripemd160, serialize_tx, serialized_segwit_tx, serialized_segwit_wtx, sha256};
 
 /// This function will read through the mempool folder and validate the transactions before adding
 /// them to a transaction for processing vector
@@ -40,21 +44,20 @@ pub fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProce
                                 is_valid = true;
                                 wtxid = Some(wtx_id);
                                 txid = tx_id;
-
-                            },
+                            }
                             _ => continue,
                         }
-                    },
+                    }
                     "p2pkh" => {
                         // If it's a p2pkh transaction validate it
                         match p2pkh_script_validation(&mut transaction) {
                             Ok((valid, tx_id)) if valid => {
                                 is_valid = true;
                                 txid = tx_id;
-                            },
+                            }
                             _ => continue,
                         }
-                    },
+                    }
                     _ => continue,
                 }
 
@@ -72,7 +75,6 @@ pub fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProce
                     continue;
                 }
 
-
                 // Get the fees for the transaction
                 let fee = verify_tx_fee(&transaction);
 
@@ -89,7 +91,7 @@ pub fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProce
                     fee,
                     is_p2wpkh: wtxid.is_some(),
                 });
-            }else {
+            } else {
                 //eprintln!("Failed to convert path to string: {:?}", path);
             }
         }
@@ -98,15 +100,14 @@ pub fn process_mempool(mempool_path: &str) -> io::Result<Vec<TransactionForProce
     Ok(valid_txs)
 }
 
-
 /// This function will verify the signature of a transaction when passed into OP_CHECKSIG
 pub fn verify_signature(
     signature: Vec<u8>,
     pubkey: Vec<u8>,
-    serialized_tx: Vec<u8>) -> Result<bool, Box<dyn Error>> {
-
+    serialized_tx: Vec<u8>,
+) -> Result<bool, Box<dyn Error>> {
     // Removing the sighash type from the signature to get the actual signature
-    let signature = &signature[..signature.len()-1];
+    let signature = &signature[..signature.len() - 1];
 
     // Create a new Secp256k1 object
     let secp = Secp256k1::new();
@@ -116,26 +117,24 @@ pub fn verify_signature(
     let message_result = Message::from_digest_slice(&hash_array).unwrap();
 
     // Create a public key from the pubkey
-    let public_key =  PublicKey::from_slice(&pubkey).expect("Failed to create public key");
+    let public_key = PublicKey::from_slice(&pubkey).expect("Failed to create public key");
 
     // Create a signature from the der encoded signature
     let signature = Signature::from_der(&signature).unwrap();
 
     // Verify the signature with the secp.verify_ecdsa function
     // Return Ok(true) if the signature is valid, Ok(false) if it's invalid
-    match secp.verify_ecdsa(&message_result, &signature,  &public_key) {
-        Ok(_) => {
-            Ok(true)
-        },
-        Err(_e) => {
-            Ok(false)
-        },
+    match secp.verify_ecdsa(&message_result, &signature, &public_key) {
+        Ok(_) => Ok(true),
+        Err(_e) => Ok(false),
     }
 }
 
 // Transaction validation
 /// This function will validate P2WPKH transactions
-pub fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, String, String), Box<dyn Error>> {
+pub fn p2wpkh_script_validation(
+    transaction: &mut Transaction,
+) -> Result<(bool, String, String), Box<dyn Error>> {
     // Create a stack to hold the data
     let mut stack: Vec<Vec<u8>> = Vec::new();
 
@@ -153,15 +152,15 @@ pub fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, 
 
         // Get the signature index 0
         let signature = hex::decode(witness[0].clone())?;
-        if signature.is_empty(){
+        if signature.is_empty() {
             return Err("Signature is empty".into());
         }
 
         // sighash type off sig
-        let sighash_type = signature[signature.len()-1];
+        let sighash_type = signature[signature.len() - 1];
 
         // Get the pubkey index 1
-        let pubkey= hex::decode(witness[1].clone())?;
+        let pubkey = hex::decode(witness[1].clone())?;
 
         // Push the signature and pubkey onto the stack
         stack.push(signature);
@@ -177,16 +176,19 @@ pub fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, 
             &mut transaction.clone(),
             i,
             pubkey_hash,
-            sighash_type.clone()
+            sighash_type.clone(),
         )?;
         let message_in_bytes = hex::decode(&message_hash)?;
 
         // Now it execute like a p2pkh script
-        let script_pubkey_asm = format!("OP_DUP OP_HASH160 OP_PUSHBYTES_20 {} OP_EQUALVERIFY OP_CHECKSIG", pubkey_hash);
+        let script_pubkey_asm = format!(
+            "OP_DUP OP_HASH160 OP_PUSHBYTES_20 {} OP_EQUALVERIFY OP_CHECKSIG",
+            pubkey_hash
+        );
 
         // Loop through the script_pubkey_asm
         // and execute the operations at each op code
-        for op in script_pubkey_asm.split_whitespace(){
+        for op in script_pubkey_asm.split_whitespace() {
             match op {
                 "OP_DUP" => {
                     // If the stack is empty return false
@@ -211,7 +213,9 @@ pub fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, 
                 "OP_EQUALVERIFY" => {
                     // if stack is less than 2 return false
                     if stack.len() < 2 {
-                        return Err(format!("Stack underflow in OP_EQUALVERIFY for input {}", i).into());
+                        return Err(
+                            format!("Stack underflow in OP_EQUALVERIFY for input {}", i).into()
+                        );
                     }
                     // Otherwise pop the last two items from the stack and compare them
                     // if they are not equal return false, if they are just continue
@@ -227,19 +231,24 @@ pub fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, 
                 "OP_CHECKSIG" => {
                     // If the stack has less than two items return false
                     if stack.len() < 2 {
-                        return Err(format!("Stack underflow in OP_CHECKSIG for input {}", i).into());
+                        return Err(
+                            format!("Stack underflow in OP_CHECKSIG for input {}", i).into()
+                        );
                     }
                     // otherwise pop the last two items from the stack (pubkey and signature)
                     // and validate the signature
                     let pubkey = stack.pop().unwrap();
                     let signature = stack.pop().unwrap();
 
-
-                    match verify_signature(signature.clone(), pubkey.clone(), message_in_bytes.clone()) {
+                    match verify_signature(
+                        signature.clone(),
+                        pubkey.clone(),
+                        message_in_bytes.clone(),
+                    ) {
                         Ok(true) => {
                             // If the signature is valid, push a 1 onto the stack
                             stack.push(vec![1]);
-                        },
+                        }
                         Ok(false) => {
                             // The signature verification was successful but reported the signature as invalid
                             let pubkey_hex = hex::encode(&pubkey);
@@ -248,13 +257,14 @@ pub fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, 
                                 "Signature verification failed for input {}. The signature does not match the provided public key and message. PubKey: {}, Signature: {}",
                                 i, pubkey_hex, signature_hex
                             ).into());
-                        },
+                        }
                         Err(e) => {
                             // An error occurred during the signature verification process
                             return Err(format!(
                                 "An error occurred while verifying the signature for input {}: {}",
                                 i, e
-                            ).into());
+                            )
+                            .into());
                         }
                     }
                 }
@@ -288,14 +298,14 @@ pub fn p2wpkh_script_validation(transaction: &mut Transaction) -> Result<(bool, 
 }
 
 /// This function will validate a P2PKH transaction
-pub fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, String), Box<dyn Error>> {
-
+pub fn p2pkh_script_validation(
+    transaction: &mut Transaction,
+) -> Result<(bool, String), Box<dyn Error>> {
     // Create a stack to hold the data
     let mut stack: Vec<Vec<u8>> = Vec::new();
 
     // Loop through the vin of the transaction
-    for (i,vin) in transaction.vin.iter().enumerate() {
-
+    for (i, vin) in transaction.vin.iter().enumerate() {
         // Clearing the stack
         stack.clear();
 
@@ -304,8 +314,13 @@ pub fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, S
         let script_pub_key = &vin.prevout.scriptpubkey_asm.clone();
 
         // Get the signature and pubkey from the scriptsig
-        let (signature, pubkey) = get_signature_and_publickey_from_scriptsig(scriptsig)
-            .map_err(|e| format!("Error getting signature and public key from scriptsig for input {}: {}", i, e))?;
+        let (signature, pubkey) =
+            get_signature_and_publickey_from_scriptsig(scriptsig).map_err(|e| {
+                format!(
+                    "Error getting signature and public key from scriptsig for input {}: {}",
+                    i, e
+                )
+            })?;
 
         // Prepare the transaction for signing
         let mut tx_for_signing = transaction.clone();
@@ -320,8 +335,10 @@ pub fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, S
             .map_err(|_e| format!("Failed to decode the hex string for input: {}", i))?;
 
         // Push the signature and pubkey onto the stack
-        let decoded_signature = hex::decode(signature).map_err(|e| format!("Failed to decode signature: {}", e))?;
-        let decoded_pubkey = hex::decode(pubkey).map_err(|e| format!("Failed to decode pubkey: {}", e))?;
+        let decoded_signature =
+            hex::decode(signature).map_err(|e| format!("Failed to decode signature: {}", e))?;
+        let decoded_pubkey =
+            hex::decode(pubkey).map_err(|e| format!("Failed to decode pubkey: {}", e))?;
         stack.push(decoded_signature);
         stack.push(decoded_pubkey);
 
@@ -351,7 +368,9 @@ pub fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, S
                 "OP_EQUALVERIFY" => {
                     // if stack is less than 2 return false
                     if stack.len() < 2 {
-                        return Err(format!("Stack underflow in OP_EQUALVERIFY for input {}", i).into());
+                        return Err(
+                            format!("Stack underflow in OP_EQUALVERIFY for input {}", i).into()
+                        );
                     }
                     // Otherwise pop the last two items from the stack and compare them
                     // If they are not equal return false, if they are just continue
@@ -367,19 +386,24 @@ pub fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, S
                 "OP_CHECKSIG" => {
                     // If the stack has less than two items return false
                     if stack.len() < 2 {
-                        return Err(format!("Stack underflow in OP_CHECKSIG for input {}", i).into());
+                        return Err(
+                            format!("Stack underflow in OP_CHECKSIG for input {}", i).into()
+                        );
                     }
                     // Otherwise pop the last two items from the stack (pubkey and signature)
                     // and validate the signature
                     let pubkey = stack.pop().unwrap();
                     let signature = stack.pop().unwrap();
 
-
-                    match verify_signature(signature.clone(), pubkey.clone(), message_in_bytes.clone()) {
+                    match verify_signature(
+                        signature.clone(),
+                        pubkey.clone(),
+                        message_in_bytes.clone(),
+                    ) {
                         Ok(true) => {
                             // If the signature is valid, push a 1 onto the stack
                             stack.push(vec![1]);
-                        },
+                        }
                         Ok(false) => {
                             // The signature verification was successful but reported the signature as invalid
                             let pubkey_hex = hex::encode(&pubkey);
@@ -388,13 +412,14 @@ pub fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, S
                                 "Signature verification failed for input {}. The signature does not match the provided public key and message. PubKey: {}, Signature: {}",
                                 i, pubkey_hex, signature_hex
                             ).into());
-                        },
+                        }
                         Err(e) => {
                             // An error occurred during the signature verification process
                             return Err(format!(
                                 "An error occurred while verifying the signature for input {}: {}",
                                 i, e
-                            ).into());
+                            )
+                            .into());
                         }
                     }
                 }
@@ -421,26 +446,28 @@ pub fn p2pkh_script_validation(transaction: &mut Transaction) -> Result<(bool, S
     Ok((true, txid))
 }
 
-
 // Helper functions to weed out bad transactions.
 /// Function to get the tx amount so
 pub fn verify_tx_fee(transaction: &Transaction) -> u64 {
     // Calculate the total input amount
-    let total_input_amount: u64 = transaction.vin.iter()
+    let total_input_amount: u64 = transaction
+        .vin
+        .iter()
         .map(|input| input.prevout.value)
         .sum();
 
     // Calculate the total output amount
-    let total_output_amount: u64 = transaction.vout.iter()
-        .map(|output| output.value)
-        .sum();
+    let total_output_amount: u64 = transaction.vout.iter().map(|output| output.value).sum();
 
     // Return the fee
     total_input_amount - total_output_amount
 }
 
 // Check double spend
-pub fn check_double_spending(transaction: &Transaction, mempool: &Vec<TransactionForProcessing>) -> bool {
+pub fn check_double_spending(
+    transaction: &Transaction,
+    mempool: &Vec<TransactionForProcessing>,
+) -> bool {
     // Loop through mempool
     for tx in mempool {
         let tx = &tx.transaction;
@@ -467,5 +494,3 @@ pub fn hash_meets_difficulty_target(hash: &str) -> bool {
     // Return true if the hash is less than the target
     hash_as_num < target
 }
-
-

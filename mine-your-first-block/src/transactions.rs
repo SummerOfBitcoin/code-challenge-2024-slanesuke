@@ -60,5 +60,5 @@ pub struct BlockHeader {
     pub merkle_root: String,
     pub timestamp: u32,
     pub bits: u32,
-    pub nonce: u32
+    pub nonce: u32,
 }
